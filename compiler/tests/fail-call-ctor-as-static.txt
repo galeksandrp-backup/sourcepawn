@@ -1,0 +1,1 @@
+(8) : error 170: creating new object 'CrabPants' requires using 'new' before its constructor
