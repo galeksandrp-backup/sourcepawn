@@ -48,7 +48,6 @@ for arch in Root.archs:
     'int-value.cpp',
     'pool-allocator.cpp',
     'scopes.cpp',
-    'smx-builder.cpp',
     'source-manager.cpp',
     'symbols.cpp',
     'reporting.cpp',
@@ -66,6 +65,8 @@ for arch in Root.archs:
     'sema/program.cpp',
     'sema/semantic-analysis.cpp',
     'sema/type-resolver.cpp',
+    'smx/smx-builder.cpp',
+    'smx/smx-compiler.cpp',
   ]
   SP.libspcomp[arch] = builder.Add(binary)
 
