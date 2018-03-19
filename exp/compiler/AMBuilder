@@ -63,6 +63,7 @@ for arch in Root.archs:
     'parser/preprocessor.cpp',
     'parser/tk-evaluator.cpp',
     'sema/name-resolver.cpp',
+    'sema/program.cpp',
     'sema/semantic-analysis.cpp',
     'sema/type-resolver.cpp',
   ]
