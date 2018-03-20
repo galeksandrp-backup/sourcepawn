@@ -81,6 +81,9 @@ class SemaPrinter : public ast::StrictAstVisitor
       case sema::ExprKind::ConstValue:
         printConstValue(expr->toConstValueExpr());
         break;
+      case sema::ExprKind::Binary:
+        printBinary(expr->toBinaryExpr());
+        break;
       default:
         assert(false);
     }
@@ -94,6 +97,18 @@ class SemaPrinter : public ast::StrictAstVisitor
       prefix();
       dump(value);
       fprintf(fp_, "\n");
+    }
+    unindent();
+  }
+
+  void printBinary(sema::BinaryExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "\"%s\"\n", TokenNames[expr->token()]);
+      printExpr(expr->left());
+      printExpr(expr->right());
     }
     unindent();
   }

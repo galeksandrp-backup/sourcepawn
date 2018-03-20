@@ -28,7 +28,7 @@ SemanticAnalysis::SemanticAnalysis(CompileContext &cc, TranslationUnit *tu)
    pool_(cc.pool()),
    types_(cc.types()),
    tu_(tu),
-   funcstate_(nullptr)
+   fs_(nullptr)
 {
 }
 
@@ -72,9 +72,9 @@ SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
 {
   FunctionSymbol *sym = node->sym();
 
-  assert(!funcstate_);
+  assert(!fs_);
 
-  if (!funcstate_ && sym->shadows()) {
+  if (!fs_ && sym->shadows()) {
     // We are the root in a series of shadowed functions.
     analyzeShadowedFunctions(sym);
   }
@@ -82,8 +82,13 @@ SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
   if (!node->body())
     return;
 
-  FuncState state(&funcstate_, node);
+  FuncState state(&fs_, node);
   visitBlockStatement(node->body());
+
+  if (fs_->return_status == ReturnStatus::All)
+    node->set_guaranteed_return();
+
+  assert(fs_->return_status != ReturnStatus::Mixed);
 }
 
 // :TODO: write tests for this.
@@ -217,10 +222,9 @@ SemanticAnalysis::visitExpression(Expression* node)
 {
   switch (node->kind()) {
     case AstKind::kIntegerLiteral:
-    {
-      IntegerLiteral* lit = node->toIntegerLiteral();
-      return visitIntegerLiteral(lit);
-    }
+      return visitIntegerLiteral(node->toIntegerLiteral());
+    case AstKind::kBinaryExpression:
+      return visitBinaryExpression(node->toBinaryExpression());
     default:
       assert(false);
   }
@@ -230,8 +234,10 @@ SemanticAnalysis::visitExpression(Expression* node)
 void
 SemanticAnalysis::visitReturnStatement(ReturnStatement* node)
 {
-  FunctionSignature* sig = funcstate_->sig;
+  FunctionSignature* sig = fs_->sig;
   Type* returnType = sig->returnType().resolved();
+
+  fs_->return_status = ReturnStatus::All;
 
   if (returnType->isVoid()) {
     if (node->expr())
@@ -264,6 +270,40 @@ SemanticAnalysis::visitIntegerLiteral(IntegerLiteral* node)
 
   Type* i32type = types_->getPrimitive(PrimitiveType::Int32);
   return new (pool_) sema::ConstValueExpr(node, i32type, b);
+}
+
+sema::BinaryExpr*
+SemanticAnalysis::visitBinaryExpression(BinaryExpression* node)
+{
+  sema::Expr* left = visitExpression(node->left());
+  if (!left)
+    return nullptr;
+
+  sema::Expr* right = visitExpression(node->right());
+  if (!right)
+    return nullptr;
+
+  assert(left->type() == right->type());
+
+  switch (node->token()) {
+  case TOK_PLUS:
+  case TOK_MINUS:
+  case TOK_STAR:
+  case TOK_SLASH:
+  case TOK_PERCENT:
+  case TOK_AMPERSAND:
+  case TOK_BITOR:
+  case TOK_BITXOR:
+  case TOK_SHR:
+  case TOK_USHR:
+  case TOK_SHL:
+    break;
+  default:
+    assert(false);
+    break;
+  }
+
+  return new (pool_) sema::BinaryExpr(node, left->type(), node->token(), left, right);
 }
 
 sema::Expr*

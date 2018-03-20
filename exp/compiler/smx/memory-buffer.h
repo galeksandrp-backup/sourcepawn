@@ -19,7 +19,8 @@
 #define _include_sp_memory_buffer_h_
 
 #include <stdio.h>
-#include "smx-builder.h"
+
+namespace sp {
 
 // Interface for SmxBuilder to blit bytes.
 class ISmxBuffer
@@ -44,7 +45,13 @@ class MemoryBuffer : public ISmxBuffer
     free(buffer_);
   }
 
+  template <typename T>
+  bool write(const T& value) {
+    return write(&value, sizeof(T));
+  }
+
   bool write(const void *bytes, size_t len) override {
+    // :TODO: fix for overflow
     if (pos_ + len > end_)
       grow(len);
     memcpy(pos_, bytes, len);
@@ -98,5 +105,7 @@ class MemoryBuffer : public ISmxBuffer
   uint8_t *pos_;
   uint8_t *end_;
 };
+
+} // namespace sp
 
 #endif // _include_sp_memory_buffer_h_

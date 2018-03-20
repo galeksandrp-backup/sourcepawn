@@ -48,6 +48,7 @@ class SemanticAnalysis
 
   sema::Expr* visitExpression(Expression* node);
   sema::ConstValueExpr* visitIntegerLiteral(IntegerLiteral* node);
+  sema::BinaryExpr* visitBinaryExpression(BinaryExpression* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);
@@ -63,15 +64,25 @@ class SemanticAnalysis
   sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
 
  private:
+  enum class ReturnStatus {
+    None,   // No return statements.
+    Mixed,  // Some returns.
+    All     // All paths return.
+  };
+
   struct FuncState : StackLinked<FuncState>
   {
     FunctionNode *fun;
     FunctionSignature *sig;
 
+    // This tracks how the current control-flow path returns.
+    ReturnStatus return_status;
+
     FuncState(FuncState **prev, FunctionNode *node)
      : StackLinked<FuncState>(prev),
        fun(node),
-       sig(node->signature())
+       sig(node->signature()),
+       return_status(ReturnStatus::None)
     {}
   };
 
@@ -81,7 +92,7 @@ class SemanticAnalysis
   TypeManager *types_;
   TranslationUnit *tu_;
 
-  FuncState *funcstate_;
+  FuncState *fs_;
 
   ke::Vector<ast::FunctionStatement*> global_functions_;
 };

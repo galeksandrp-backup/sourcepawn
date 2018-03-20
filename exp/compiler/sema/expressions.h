@@ -32,7 +32,8 @@ class Expression;
 namespace sema {
 
 #define SEMA_KIND_LIST(_) \
-  _(ConstValue)
+  _(ConstValue)           \
+  _(Binary)
 
 // Forward declarations.
 #define _(name) class name##Expr;
@@ -59,6 +60,7 @@ public:
     return type_;
   }
   virtual ExprKind kind() const = 0;
+  virtual const char* prettyName() const = 0;
 
 #define _(name)                                 \
   virtual name##Expr* as##name##Expr() {        \
@@ -67,8 +69,7 @@ public:
   virtual name##Expr* to##name##Expr() {        \
     assert(false);                              \
     return nullptr;                             \
-  }                                             \
-  virtual const char* prettyName() const = 0;
+  }
   SEMA_KIND_LIST(_)
 #undef _
 
@@ -91,7 +92,7 @@ private:
     return #name "Expr";                    \
   }
 
-class ConstValueExpr : public Expr
+class ConstValueExpr final : public Expr
 {
 public:
   explicit ConstValueExpr(ast::Expression* node, Type* type, const BoxedValue& value)
@@ -107,6 +108,38 @@ public:
 
 private:
   BoxedValue value_;
+};
+
+class BinaryExpr final : public Expr
+{
+ public:
+  explicit BinaryExpr(ast::Expression* node,
+                      Type* type,
+                      TokenKind tok,
+                      Expr* left,
+                      Expr* right)
+   : Expr(node, type),
+     token_(tok),
+     left_(left),
+     right_(right)
+  {}
+
+  DECLARE_SEMA(Binary)
+
+  TokenKind token() const {
+    return token_;
+  }
+  Expr* left() const {
+    return left_;
+  }
+  Expr* right() const {
+    return right_;
+  }
+
+ private:
+  TokenKind token_;
+  Expr* left_;
+  Expr* right_;
 };
 
 #undef DECLARE_SEMA

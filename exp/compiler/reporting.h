@@ -38,6 +38,7 @@ enum class rmsg_type
   note,
   syntax,
   type,
+  impl,
   warning
 };
 

@@ -20,7 +20,7 @@
 #define _include_sourcepawn_ast_h_
 
 #include "pool-allocator.h"
-#include <am-vector.h>
+#include "label.h"
 #include "tokens.h"
 #include "types.h"
 #include "symbols.h"
@@ -28,6 +28,7 @@
 #include "tokens.h"
 #include "type-specifier.h"
 #include "value-attrs.h"
+#include <am-vector.h>
 #include <limits.h>
 
 namespace sp {
@@ -1019,7 +1020,8 @@ class FunctionNode : public PoolObject
    : kind_(kind),
      body_(nullptr),
      signature_(nullptr),
-     funScope_(nullptr)
+     funScope_(nullptr),
+     guaranteed_return_(false)
   {
   }
 
@@ -1057,12 +1059,25 @@ class FunctionNode : public PoolObject
     return shadowed_;
   }
 
+  void set_guaranteed_return() {
+    guaranteed_return_ = true;
+  }
+  bool guaranteed_return() const {
+    return guaranteed_return_;
+  }
+
+  Label* address() {
+    return &address_;
+  }
+
  private:
   TokenKind kind_;
   BlockStatement *body_;
   FunctionSignature *signature_;
   Scope *funScope_;
   FunctionSymbol *shadowed_;
+  Label address_;
+  bool guaranteed_return_;
 };
 
 class FunctionStatement :
