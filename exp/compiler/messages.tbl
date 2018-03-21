@@ -148,6 +148,7 @@ RMSG(typeset_must_only_have_fun,    type,              "typesets should only con
 RMSG(int_literal_out_of_range,      syntax,            "integer literal is out of range")
 
 RMSG(non_public_not_supported,      impl,              "non-public functions are not yet supported")
+RMSG(regalloc_error,                fatal,             "regalloc internal error: %0")
 
 //MSG(NotAllPathsReturnValue,         SyntaxError,            "not all paths through function return a value")
 //MSG(UsedVoidReturn,                 SyntaxError,            "value returned, but function is void")

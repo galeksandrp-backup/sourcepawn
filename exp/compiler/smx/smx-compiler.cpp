@@ -18,6 +18,8 @@
 #include "compile-context.h"
 #include "parser/ast.h"
 #include "smx-compiler.h"
+#include <amtl/am-algorithm.h>
+#include <amtl/am-maybe.h>
 #include <smx/smx-v1.h>
 #include <sp_vm_types.h>
 
@@ -31,9 +33,13 @@ typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
 typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
 typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
+uint64_t SValue::sSequenceNo = 0;
+
 SmxCompiler::SmxCompiler(CompileContext& cc, sema::Program* program)
  : cc_(cc),
-   program_(program)
+   program_(program),
+   pri_value_(0),
+   alt_value_(0)
 {
   names_ = new SmxNameTable(".names");
   builder_.add(names_);
@@ -143,6 +149,14 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
     default:
       assert(false);
   }
+
+  // If compilation is going okay, the operand stack should be empty.
+  if (cc_.phasePassed() &&
+      (!operand_stack_.empty() || pri_value_ || alt_value_))
+  {
+    cc_.report(SourceLocation(), rmsg::regalloc_error) <<
+      "operand stack is not empty at end of statement";
+  }
 }
 
 void
@@ -158,7 +172,6 @@ SmxCompiler::generateBlock(ast::BlockStatement* block)
 void
 SmxCompiler::generateReturn(ast::ReturnStatement* stmt)
 {
-  // :TODO: verify stack depth
   emit_into(stmt->sema_expr(), ValueDest::Pri);
   __ opcode(OP_RETN);
 }
@@ -169,25 +182,42 @@ SmxCompiler::emit_into(sema::Expr* expr, ValueDest dest)
   ValueDest actual = emit(expr, dest);
   if (actual == ValueDest::Error)
     return false;
+  if (actual == dest)
+    return true;
 
-  assert(actual == dest);
+  will_kill(dest);
+  if (dest == ValueDest::Pri || dest == ValueDest::Alt) {
+    // move.pri = pri <- alt
+    // move.alt = alt <- pri
+    //
+    // Since actual != dest, we just need to move into the opposite register.
+    if (actual == ValueDest::Alt)
+      __ opcode(OP_MOVE_PRI);
+    else
+      __ opcode(OP_MOVE_ALT);
+    return true;
+  }
+
+  assert(false);
   return true;
 }
 
-auto
-SmxCompiler::emit(sema::Expr* expr, ValueDest dest) -> ValueDest
+ValueDest
+SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
 {
   switch (expr->kind()) {
   case sema::ExprKind::ConstValue:
     return emitConstValue(expr->toConstValueExpr(), dest);
+  case sema::ExprKind::Binary:
+    return emitBinary(expr->toBinaryExpr(), dest);
   default:
     assert(false);
     return ValueDest::Error;
   }
 }
 
-auto
-SmxCompiler::emitConstValue(sema::ConstValueExpr* expr, ValueDest dest) -> ValueDest
+ValueDest
+SmxCompiler::emitConstValue(sema::ConstValueExpr* expr, ValueDest dest)
 {
   cell_t value = 0;
   const BoxedValue& box = expr->value();
@@ -204,19 +234,201 @@ SmxCompiler::emitConstValue(sema::ConstValueExpr* expr, ValueDest dest) -> Value
     assert(false);
   }
 
+  will_kill(dest);
+
   switch (dest) {
   case ValueDest::Pri:
     __ opcode(OP_CONST_PRI, value);
-    return dest;
+    break;
   case ValueDest::Alt:
     __ opcode(OP_CONST_ALT, value);
-    return dest;
+    break;
   case ValueDest::Stack:
     __ opcode(OP_PUSH_C, value);
-    return dest;
+    break;
   default:
     assert(false);
   }
+
+  return dest;
+}
+
+static inline ke::Maybe<int32_t>
+MaybeConstInt32(sema::Expr* expr)
+{
+  sema::ConstValueExpr* cv = expr->asConstValueExpr();
+  if (!cv)
+    return Nothing();
+
+  const BoxedValue& box = cv->value();
+  if (box.kind() != BoxedValue::Kind::Integer)
+    return Nothing();
+
+  const IntValue& iv = box.toInteger();
+  if (!iv.valueFitsInInt32())
+    return Nothing();
+
+  return Some((int32_t)iv.asSigned());
+}
+
+ValueDest
+SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
+{
+  sema::Expr* left = expr->left();
+  sema::Expr* right = expr->right();
+
+  Maybe<int32_t> left_i32 = MaybeConstInt32(left);
+  Maybe<int32_t> right_i32 = MaybeConstInt32(right);
+
+  switch (expr->token()) {
+    case TOK_PLUS:
+    case TOK_STAR:
+    {
+      // Try to get left=expr and right=const for ADD.C.
+      if (left_i32) {
+        ke::Swap(left, right);
+        ke::Swap(left_i32, right_i32);
+      }
+
+      if (!emit_into(left, ValueDest::Pri))
+        return ValueDest::Error;
+      if (right_i32) {
+        if (expr->token() == TOK_PLUS)
+          __ opcode(OP_ADD_C, *right_i32);
+        else if (expr->token() == TOK_STAR)
+          __ opcode(OP_SMUL_C, *right_i32);
+        return ValueDest::Pri;
+      }
+
+      // untested
+      assert(false);
+
+      uint64_t saved_pri = save(ValueDest::Pri);
+      if (!emit_into(right, ValueDest::Alt))
+        return ValueDest::Error;
+      restore(saved_pri);
+
+      if (expr->token() == TOK_PLUS)
+        __ opcode(OP_ADD);
+      else if (expr->token() == TOK_STAR)
+        __ opcode(OP_SMUL);
+      return ValueDest::Pri;
+    }
+
+    case TOK_MINUS:
+    {
+      if (!emit_into(left, ValueDest::Pri))
+        return ValueDest::Error;
+
+      uint64_t saved_pri = save(ValueDest::Pri);
+      if (!emit_into(right, ValueDest::Alt))
+        return ValueDest::Error;
+      restore(saved_pri);
+
+      __ opcode(OP_SUB);
+      return ValueDest::Pri;
+    }
+
+    default:
+      assert(false);
+      return ValueDest::Error;
+  }
+}
+
+void
+SmxCompiler::will_kill(ValueDest dest)
+{
+  if (dest == ValueDest::Stack)
+    return;
+
+  assert(dest == ValueDest::Pri || dest == ValueDest::Alt);
+
+  uint64_t* slot = nullptr;
+  OPCODE op = OP_NOP;
+  if (dest == ValueDest::Pri) {
+    slot = &pri_value_;
+    op = OP_PUSH_PRI;
+  } else {
+    slot = &alt_value_;
+    op = OP_PUSH_ALT;
+  }
+
+  // We don't bother asserting that the slot is a particular value. We just
+  // push it. If stuff is unbalanced, it will be caught in emitStatement or in
+  // restore().
+  if (*slot)
+    __ opcode(op);
+
+  *slot = 0;
+}
+
+uint64_t
+SmxCompiler::save(ValueDest dest)
+{
+  assert(dest == ValueDest::Pri || dest == ValueDest::Alt);
+
+  SValue value(dest);
+  operand_stack_.append(value);
+
+  uint64_t* slot = (dest == ValueDest::Pri)
+                   ? &pri_value_
+                   : &alt_value_;
+  if (*slot) {
+    cc_.report(SourceLocation(), rmsg::regalloc_error) <<
+      "saving register without a clobber";
+  }
+
+  *slot = value.id();
+  assert(pri_value_ != alt_value_);
+
+  return value.id();
+}
+
+// Restore a register that was previously saved.
+void
+SmxCompiler::restore(uint64_t id)
+{
+  if (operand_stack_.empty() || operand_stack_.back().id() != id) {
+    cc_.report(SourceLocation(), rmsg::regalloc_error) <<
+      "restored register is not top of operand stack";
+    return;
+  }
+
+  SValue value = operand_stack_.popCopy();
+  assert(value.where() == ValueDest::Pri || value.where() == ValueDest::Alt);
+
+  uint64_t* slot = nullptr;
+  OPCODE op = OP_NOP;
+  if (value.where() == ValueDest::Pri) {
+    slot = &pri_value_;
+    op = OP_POP_PRI;
+  } else {
+    slot = &alt_value_;
+    op = OP_POP_ALT;
+  }
+
+  if (*slot == value.id()) {
+    // The value hasn't been changed or killed, so we can just clear it.
+    *slot = 0;
+    return;
+  }
+
+  // If another value is occupying this register, it means we forgot to kill
+  // it somewhere. Or we have an antipattern like:
+  //    save pri -> A
+  //    kill pri
+  //    save pri -> B
+  //    restore A
+  //
+  // But this should have been caught above via the operand stack.
+  if (*slot != 0) {
+    cc_.report(SourceLocation(), rmsg::regalloc_error) <<
+      "restoring saved register would overwrite another value";
+    return;
+  }
+
+  __ opcode(op);
+  *slot = 0;
 }
 
 int
