@@ -587,6 +587,8 @@ class FunctionType : public Type
     return signature_;
   }
 
+  Type* returnType() const;
+
  private:
   ast::FunctionSignature *signature_;
 };

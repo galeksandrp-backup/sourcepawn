@@ -82,9 +82,9 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ NameProxy (%s)\n", name->name()->chars());
   }
-  void visitCallExpr(CallExpr *node) override {
+  void visitCallExpression(CallExpression *node) override {
     prefix();
-    fprintf(fp_, "[ CallExpr\n");
+    fprintf(fp_, "[ CallExpression\n");
     indent();
     node->callee()->accept(this);
     for (size_t i = 0; i < node->arguments()->length(); i++)

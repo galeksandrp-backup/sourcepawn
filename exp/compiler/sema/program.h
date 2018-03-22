@@ -34,6 +34,7 @@ class FunctionDef;
 
 struct Program : public PoolObject
 {
+  ke::Vector<ast::FunctionStatement*> natives;
   ke::Vector<ast::FunctionStatement*> functions;
 
   void dump(FILE* fp);

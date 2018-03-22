@@ -257,10 +257,6 @@ class FunctionSymbol : public Symbol
     return "function";
   }
 
-  Label *address() {
-    return &address_;
-  }
-
   void addShadow(ast::FunctionStatement *stmt);
   FuncStmtList *shadows() const {
     return shadows_;
@@ -269,7 +265,6 @@ class FunctionSymbol : public Symbol
   ast::FunctionStatement *impl() const;
 
  private:
-  Label address_;
   FuncStmtList *shadows_;
 };
 

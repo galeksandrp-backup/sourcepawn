@@ -60,7 +60,7 @@ class CompileContext;
   _(FunctionStatement)    \
   _(CallNewExpr)          \
   _(NewArrayExpr)         \
-  _(CallExpr)             \
+  _(CallExpression)       \
   _(FieldExpression)      \
   _(IfStatement)          \
   _(IndexExpression)      \
@@ -287,6 +287,11 @@ class VarDecl : public Statement
   }
   VariableSymbol *sym() const {
     return sym_;
+  }
+
+  // This is only valid after type resolution.
+  Type* type() const {
+    return te().resolved();
   }
 
   // When parsed as a list of declarations, for example:
@@ -761,17 +766,17 @@ class NewArrayExpr : public Expression
   ExpressionList *dims_;
 };
 
-class CallExpr : public Expression
+class CallExpression : public Expression
 {
  public:
-  CallExpr(const SourceLocation &pos, Expression *callee, ExpressionList *arguments)
+  CallExpression(const SourceLocation &pos, Expression *callee, ExpressionList *arguments)
     : Expression(pos),
       callee_(callee),
       arguments_(arguments)
   {
   }
 
-  DECLARE_NODE(CallExpr);
+  DECLARE_NODE(CallExpression);
 
   Expression *callee() const {
     return callee_;
@@ -971,7 +976,8 @@ class ExpressionStatement : public Statement
  public:
   ExpressionStatement(Expression *expression)
    : Statement(expression->loc()),
-     expression_(expression)
+     expression_(expression),
+     sema_expr_(nullptr)
   {
   }
 
@@ -980,6 +986,16 @@ class ExpressionStatement : public Statement
   Expression *expr() const {
     return expression_;
   }
+
+  sema::Expr* sema_expr() const {
+    return sema_expr_;
+  }
+  void set_sema_expr(sema::Expr* expr) {
+    sema_expr_ = expr;
+  }
+
+ private:
+  sema::Expr* sema_expr_;
 };
 
 // Block statements have a "kind" denoting information about the block.
@@ -1059,6 +1075,13 @@ class FunctionNode : public PoolObject
     return shadowed_;
   }
 
+  Type* signature_type() const {
+    return signature_type_;
+  }
+  void set_signature_type(Type* type) {
+    signature_type_ = type;
+  }
+
   void set_guaranteed_return() {
     guaranteed_return_ = true;
   }
@@ -1077,6 +1100,7 @@ class FunctionNode : public PoolObject
   Scope *funScope_;
   FunctionSymbol *shadowed_;
   Label address_;
+  Type* signature_type_;
   bool guaranteed_return_;
 };
 
@@ -1806,7 +1830,7 @@ class ParseTree : public PoolObject
 //  void visitNameProxy(NameProxy *node) override;
 //  void visitExpressionStatement(ExpressionStatement *node) override;
 //  void visitFunctionStatement(FunctionStatement *node) override;
-//  void visitCallExpr(CallExpr *node) override;
+//  void visitCallExpression(CallExpression *node) override;
 //  void visitFieldExpression(FieldExpression *node) override;
 //  void visitIfStatement(IfStatement *node) override;
 //  void visitIndexExpression(IndexExpression *node) override;

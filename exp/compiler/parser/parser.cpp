@@ -214,7 +214,7 @@ Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
   }
 
   FunctionSignature *sig =
-    delegate_.HandleFunctionSignature(returnType, params, canResolveEagerly);
+    delegate_.HandleFunctionSignature(TOK_PUBLIC, returnType, params, canResolveEagerly);
   spec->setFunctionType(sig);
 }
 
@@ -791,7 +791,7 @@ Parser::primary()
         if (!args)
           return nullptr;
 
-        return new (pool_) CallExpr(loc, expr, args);
+        return new (pool_) CallExpression(loc, expr, args);
       }
 
       case TOK_DOT:
@@ -1217,9 +1217,7 @@ Parser::parseFunctionBase(const TypeExpr &returnType, TokenKind kind)
       scanner_.skipUntil(TOK_LBRACE, SkipFlags::StopAtLine | SkipFlags::StopBeforeMatch);
     }
 
-    FunctionSignature *sig =
-      delegate_.HandleFunctionSignature(returnType, params, canEarlyResolve);
-    node->setSignature(sig);
+    delegate_.HandleFunctionSignature(kind, node, returnType, params, canEarlyResolve);
 
     // Hrm... should be complting the decl here instead? Right now it seems
     // fine not to, but in the future it could lead to weird ordering in the
@@ -2045,9 +2043,7 @@ Parser::function(TokenKind kind, Declaration &decl, uint32_t attrs)
       scanner_.skipUntil(TOK_LBRACE, SkipFlags::StopAtLine | SkipFlags::StopBeforeMatch);
     }
 
-    FunctionSignature *signature =
-      delegate_.HandleFunctionSignature(decl.spec, params, canEagerResolve);
-    stmt->setSignature(signature);
+    delegate_.HandleFunctionSignature(kind, stmt, decl.spec, params, canEagerResolve);
 
     BlockStatement *body = nullptr;
     if (kind != TOK_FORWARD && kind != TOK_NATIVE) {

@@ -37,8 +37,24 @@ class SmxAssemblyBuffer : public AssemblyBuffer
     write<cell_t>(static_cast<cell_t>(op));
     write<cell_t>(param);
   }
+  void opcode(OPCODE op, Label* address) {
+    write<cell_t>(static_cast<cell_t>(op));
+    encodeAbsoluteAddress(address);
+  }
+
+  void sysreq_n(Label* address, uint32_t nparams) {
+    write<cell_t>(static_cast<cell_t>(OP_SYSREQ_N));
+    encodeAbsoluteAddress(address);
+    write<cell_t>(nparams);
+  }
 
   void bind(Label* target) {
+    bind_to(target, pc());
+  }
+
+  void bind_to(Label* target, cell_t value) {
+    assert(value >= 0);
+
     if (outOfMemory()) {
       // If we ran out of memory, the code stream is potentially invalid and
       // we cannot use the embedded linked list.
@@ -49,16 +65,27 @@ class SmxAssemblyBuffer : public AssemblyBuffer
     assert(!target->bound());
     uint32_t status = target->status();
     while (Label::More(status)) {
-      // Grab the offset. It should be at least 1byte op + rel32.
       uint32_t offset = Label::ToOffset(status);
-      assert(offset >= 5);
+      assert(offset >= 4 && offset <= pc());
 
       int32_t* p = reinterpret_cast<int32_t*>(buffer() + offset - 4);
       status = *p;
-      *p = pc();
+      *p = value;
     }
-    target->bind(pc());
+    target->bind(value);
   }
+
+ private:
+  void encodeAbsoluteAddress(Label* address) {
+    if (address->bound()) {
+      write<cell_t>(address->offset());
+    } else {
+      write<cell_t>(address->addPending(pc() + sizeof(cell_t)));
+    }
+  }
+
+ private:
+  // :TODO: assert labels bound
 };
 
 }

@@ -43,12 +43,12 @@ class SemaPrinter : public ast::StrictAstVisitor
       prefix();
       dump(node->signature());
       if (node->body())
-        printBlock(node->body());
+        visitBlockStatement(node->body());
     }
     unindent();
   }
 
-  void printBlock(ast::BlockStatement* body) {
+  void visitBlockStatement(ast::BlockStatement* body) override {
     prefix();
     fprintf(fp_, "- BlockStatement\n");
     indent();
@@ -62,7 +62,7 @@ class SemaPrinter : public ast::StrictAstVisitor
     unindent();
   }
 
-  void visitReturnStatement(ast::ReturnStatement* stmt) {
+  void visitReturnStatement(ast::ReturnStatement* stmt) override {
     prefix();
     fprintf(fp_, "- ReturnStatement\n");
     indent();
@@ -76,6 +76,16 @@ class SemaPrinter : public ast::StrictAstVisitor
     unindent();
   }
 
+  void visitExpressionStatement(ast::ExpressionStatement* stmt) override {
+    prefix();
+    fprintf(fp_, "- ExpressionStatement\n");
+    indent();
+    {
+      printExpr(stmt->sema_expr());
+    }
+    unindent();
+  }
+
   void printExpr(sema::Expr* expr) {
     switch (expr->kind()) {
       case sema::ExprKind::ConstValue:
@@ -83,6 +93,12 @@ class SemaPrinter : public ast::StrictAstVisitor
         break;
       case sema::ExprKind::Binary:
         printBinary(expr->toBinaryExpr());
+        break;
+      case sema::ExprKind::Call:
+        printCall(expr->toCallExpr());
+        break;
+      case sema::ExprKind::NamedFunction:
+        printNamedFunction(expr->toNamedFunctionExpr());
         break;
       default:
         assert(false);
@@ -97,6 +113,27 @@ class SemaPrinter : public ast::StrictAstVisitor
       prefix();
       dump(value);
       fprintf(fp_, "\n");
+    }
+    unindent();
+  }
+
+  void printCall(sema::CallExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      printExpr(expr->callee());
+      for (size_t i = 0; i < expr->args()->length(); i++)
+        printExpr(expr->args()->at(i));
+    }
+    unindent();
+  }
+
+  void printNamedFunction(sema::NamedFunctionExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "%s\n", expr->sym()->name()->chars());
     }
     unindent();
   }

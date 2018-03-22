@@ -438,8 +438,18 @@ TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
 void
 TypeResolver::visitFunction(FunctionNode *node)
 {
-  if (!node->signature()->isResolved())
+  if (!node->signature()->isResolved()) {
     resolveTypesInSignature(node->signature());
+    assignTypeToFunction(node);
+  }
+}
+
+void
+TypeResolver::assignTypeToFunction(FunctionNode* node)
+{
+  assert(!node->signature_type());
+  Type* type = cc_.types()->newFunction(node->signature());
+  node->set_signature_type(type);
 }
 
 void

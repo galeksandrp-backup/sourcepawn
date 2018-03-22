@@ -66,6 +66,7 @@ class TypeManager
   StructType *newStruct(Atom* name);
   TypedefType *newTypedef(Atom *name);
   ReferenceType* newReference(Type* type);
+  FunctionType* newFunction(ast::FunctionSignature* sig);
 
   Type *typeForLabelAtom(Atom *atom);
 

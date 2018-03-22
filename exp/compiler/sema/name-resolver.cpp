@@ -600,21 +600,52 @@ NameResolver::LeaveMethodDecl(MethodDecl *decl)
     tr_.addPending(decl);
 }
 
-FunctionSignature *
-NameResolver::HandleFunctionSignature(TypeSpecifier &spec,
-                                      ParameterList *params,
+void
+NameResolver::HandleFunctionSignature(TokenKind kind,
+                                      FunctionNode* node,
+                                      TypeSpecifier& spec,
+                                      ParameterList* params,
                                       bool canResolveEagerly)
 {
   TypeExpr te = resolve(spec);
-  return HandleFunctionSignature(te, params, canResolveEagerly);
+  HandleFunctionSignature(kind, node, te, params, canResolveEagerly);
 }
 
-FunctionSignature *
-NameResolver::HandleFunctionSignature(const TypeExpr &te,
-                                      ParameterList *params,
+void
+NameResolver::HandleFunctionSignature(TokenKind kind,
+                                      FunctionNode* node,
+                                      const TypeExpr& te,
+                                      ParameterList* params,
                                       bool canResolveEagerly)
 {
-  FunctionSignature *sig = new (pool_) FunctionSignature(te, params);
+  FunctionSignature* sig = HandleFunctionSignature(kind, te, params, canResolveEagerly);
+  node->setSignature(sig);
+
+  if (sig->isResolved())
+    tr_.assignTypeToFunction(node);
+}
+
+FunctionSignature*
+NameResolver::HandleFunctionSignature(TokenKind kind,
+                                      TypeSpecifier& spec,
+                                      ParameterList* params,
+                                      bool canResolveEagerly)
+{
+  TypeExpr te = resolve(spec);
+  return HandleFunctionSignature(kind, te, params, canResolveEagerly);
+}
+
+FunctionSignature*
+NameResolver::HandleFunctionSignature(TokenKind kind,
+                                      const TypeExpr& te,
+                                      ParameterList* params,
+                                      bool canResolveEagerly)
+{
+  FunctionSignature* sig = new (pool_) FunctionSignature(te, params);
+
+  if (kind == TOK_NATIVE)
+    sig->setNative();
+
   if (te.resolved() && canResolveEagerly) {
 #if defined(DEBUG)
     for (size_t i = 0; i < params->length(); i++)

@@ -17,6 +17,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "compile-context.h"
 #include "semantic-analysis.h"
+#include "scopes.h"
 
 namespace sp {
 
@@ -40,6 +41,7 @@ SemanticAnalysis::analyze()
 
   sema::Program* program = new (pool_) sema::Program;
   program->functions = ke::Move(global_functions_);
+  program->natives = ke::Move(global_natives_);
   return program;
 }
 
@@ -55,7 +57,6 @@ SemanticAnalysis::walkAST()
       {
         FunctionStatement* fun = stmt->toFunctionStatement();
         visitFunctionStatement(fun);
-        global_functions_.append(fun);
         break;
       }
       default:
@@ -79,8 +80,11 @@ SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
     analyzeShadowedFunctions(sym);
   }
 
-  if (!node->body())
+  if (!node->body()) {
+    if (node->signature()->native())
+      global_natives_.append(node);
     return;
+  }
 
   FuncState state(&fs_, node);
   visitBlockStatement(node->body());
@@ -89,6 +93,7 @@ SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
     node->set_guaranteed_return();
 
   assert(fs_->return_status != ReturnStatus::Mixed);
+  global_functions_.append(node);
 }
 
 // :TODO: write tests for this.
@@ -208,8 +213,12 @@ SemanticAnalysis::visitStatement(Statement* node)
   switch (node->kind()) {
     case AstKind::kReturnStatement:
     {
-      ReturnStatement* stmt = node->toReturnStatement();
-      visitReturnStatement(stmt);
+      visitReturnStatement(node->toReturnStatement());
+      break;
+    }
+    case AstKind::kExpressionStatement:
+    {
+      visitExpressionStatement(node->toExpressionStatement());
       break;
     }
     default:
@@ -225,6 +234,10 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitIntegerLiteral(node->toIntegerLiteral());
     case AstKind::kBinaryExpression:
       return visitBinaryExpression(node->toBinaryExpression());
+    case AstKind::kCallExpression:
+      return visitCallExpression(node->toCallExpression());
+    case AstKind::kNameProxy:
+      return visitNameProxy(node->toNameProxy());
     default:
       assert(false);
   }
@@ -256,6 +269,58 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement* node)
   node->set_sema_expr(expr);
 }
 
+void
+SemanticAnalysis::visitExpressionStatement(ExpressionStatement* node)
+{
+  sema::Expr* expr = visitExpression(node->expr());
+  if (!expr)
+    return;
+  node->set_sema_expr(expr);
+}
+
+sema::CallExpr*
+SemanticAnalysis::visitCallExpression(CallExpression* node)
+{
+  // Call expressions are complicated because we only support very specific
+  // patterns. We sniff them out here.
+  sema::Expr* callee = nullptr;
+  if (NameProxy* proxy = node->callee()->asNameProxy()) {
+    if (FunctionSymbol* sym = proxy->sym()->asFunction()) {
+      assert(sym->scope()->kind() == Scope::Global);
+      callee = new (pool_) sema::NamedFunctionExpr(proxy, sym->impl()->signature_type(), sym);
+    }
+  }
+
+  if (!callee || !callee->type()->isFunction()) {
+    cc_.report(node->loc(), rmsg::callee_is_not_function);
+    return nullptr;
+  }
+
+  FunctionType* fun_type = callee->type()->asFunction();
+  ast::FunctionSignature* sig = fun_type->signature();
+  ast::ParameterList* params = sig->parameters();
+
+  ast::ExpressionList* ast_args = node->arguments();
+
+  if (params->length() != ast_args->length()) {
+    cc_.report(node->loc(), rmsg::argcount_not_supported);
+    return nullptr;
+  }
+
+  sema::ExprList* args = new (pool_) sema::ExprList();
+  for (size_t i = 0; i < ast_args->length(); i++) {
+    ast::Expression* ast_arg = ast_args->at(i);
+    sema::Expr* arg = visitExpression(ast_arg);
+    if (!arg)
+      continue;
+    if (!(arg = coerce(arg, params->at(i)->type(), Coercion::Arg)))
+      continue;
+    args->append(arg);
+  }
+
+  return new (pool_) sema::CallExpr(node, fun_type->returnType(), callee, args);
+}
+
 sema::ConstValueExpr*
 SemanticAnalysis::visitIntegerLiteral(IntegerLiteral* node)
 {
@@ -270,6 +335,13 @@ SemanticAnalysis::visitIntegerLiteral(IntegerLiteral* node)
 
   Type* i32type = types_->getPrimitive(PrimitiveType::Int32);
   return new (pool_) sema::ConstValueExpr(node, i32type, b);
+}
+
+sema::Expr*
+SemanticAnalysis::visitNameProxy(ast::NameProxy* node)
+{
+  assert(false);
+  return nullptr;
 }
 
 sema::BinaryExpr*
@@ -322,18 +394,6 @@ SemanticAnalysis::coerce(sema::Expr* expr, Type* to, Coercion context)
   assert(false);
   return nullptr;
 }
-
-#if 0
-void
-SemanticAnalysis::visitBlockStatement(BlockStatement *node)
-{
-  StatementList *stmts = node->statements();
-  for (size_t i = 0; i < stmts->length(); i++) {
-    Statement *stmt = stmts->at(i);
-    stmt->accept(this);
-  }
-}
-#endif
 
 #if 0
 void

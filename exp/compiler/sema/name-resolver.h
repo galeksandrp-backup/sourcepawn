@@ -76,13 +76,28 @@ class NameResolver
   void EnterTypeIntoTypeset(TypesetDecl *decl, Vector<TypesetDecl::Entry> &types, TypeSpecifier &spec);
   void FinishTypeset(TypesetDecl *decl, const Vector<TypesetDecl::Entry> &types);
 
-  FunctionSignature *HandleFunctionSignature(
-    TypeSpecifier &spec,
-    ParameterList *params,
+  void HandleFunctionSignature(
+    TokenKind kind,
+    FunctionNode* node,
+    TypeSpecifier& spec,
+    ParameterList* params,
     bool canResolveEagerly);
-  FunctionSignature *HandleFunctionSignature(
-    const TypeExpr &te,
-    ParameterList *params,
+  void HandleFunctionSignature(
+    TokenKind kind,
+    FunctionNode* node,
+    const TypeExpr& te,
+    ParameterList* params,
+    bool canResolveEagerly);
+
+  FunctionSignature* HandleFunctionSignature(
+    TokenKind kind,
+    TypeSpecifier& spec,
+    ParameterList* params,
+    bool canResolveEagerly);
+  FunctionSignature* HandleFunctionSignature(
+    TokenKind kind,
+    const TypeExpr& te,
+    ParameterList* params,
     bool canResolveEagerly);
 
  private:

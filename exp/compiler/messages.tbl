@@ -139,15 +139,16 @@ RMSG(function_has_no_impl,          type,              "function '%0' cannot be 
 RMSG(const_has_no_meaning,          type,              "const has no meaning on type '%0' in this context")
 RMSG(const_ref_has_no_meaning,      type,              "const reference has no meaning on type '%0' in this context")
 RMSG(cannot_use_type_in_decl,       type,              "cannot use type '%0' in a variable declaration")
-
 RMSG(need_return_value,             type,              "non-void function needs return value")
 RMSG(returned_in_void_function,     type,              "void function cannot return a value")
 RMSG(typedef_must_be_fun,           type,              "typedefs may only be used with function types")
 RMSG(typeset_must_only_have_fun,    type,              "typesets should only contain function types")
+RMSG(callee_is_not_function,        type,              "callee must be a named global function")
 
 RMSG(int_literal_out_of_range,      syntax,            "integer literal is out of range")
 
 RMSG(non_public_not_supported,      impl,              "non-public functions are not yet supported")
+RMSG(argcount_not_supported,        impl,              "argument count not supported")
 RMSG(regalloc_error,                fatal,             "regalloc internal error: %0")
 
 //MSG(NotAllPathsReturnValue,         SyntaxError,            "not all paths through function return a value")

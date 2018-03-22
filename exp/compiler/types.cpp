@@ -158,6 +158,12 @@ FunctionType::New(FunctionSignature *sig)
   return new (POOL()) FunctionType(sig);
 }
 
+Type*
+FunctionType::returnType() const
+{
+  return signature_->returnType().resolved();
+}
+
 TypesetType *
 TypesetType::New(Atom* name)
 {

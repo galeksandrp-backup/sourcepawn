@@ -23,6 +23,7 @@
 
 namespace sp {
 
+class FunctionSymbol;
 class Type;
 
 namespace ast {
@@ -32,8 +33,11 @@ class Expression;
 namespace sema {
 
 #define SEMA_KIND_LIST(_) \
+  _(Binary)               \
+  _(Call)                 \
   _(ConstValue)           \
-  _(Binary)
+  _(NamedFunction)        \
+  /* terminator */
 
 // Forward declarations.
 #define _(name) class name##Expr;
@@ -77,6 +81,8 @@ private:
   ast::Expression* node_;
   Type* type_;
 };
+
+typedef PoolList<Expr*> ExprList;
 
 #define DECLARE_SEMA(name)                  \
   ExprKind kind() const override {          \
@@ -140,6 +146,52 @@ class BinaryExpr final : public Expr
   TokenKind token_;
   Expr* left_;
   Expr* right_;
+};
+
+class NamedFunctionExpr final : public Expr
+{
+ public:
+  explicit NamedFunctionExpr(ast::Expression* node,
+                             Type* type,
+                             FunctionSymbol* sym)
+   : Expr(node, type),
+     sym_(sym)
+  {}
+
+  DECLARE_SEMA(NamedFunction)
+
+  FunctionSymbol* sym() const {
+    return sym_;
+  }
+
+ private:
+  FunctionSymbol* sym_;
+};
+
+class CallExpr final : public Expr
+{
+ public:
+  explicit CallExpr(ast::Expression* node,
+                    Type* type,
+                    Expr* callee,
+                    ExprList* args)
+   : Expr(node, type),
+     callee_(callee),
+     args_(args)
+  {}
+
+  DECLARE_SEMA(Call)
+
+  Expr* callee() const {
+    return callee_;
+  }
+  ExprList* args() const {
+    return args_;
+  }
+
+ private:
+  Expr* callee_;
+  ExprList* args_;
 };
 
 #undef DECLARE_SEMA

@@ -161,6 +161,12 @@ TypeManager::newReference(Type* type)
   return ref;
 }
 
+FunctionType*
+TypeManager::newFunction(ast::FunctionSignature* sig)
+{
+  return FunctionType::New(sig);
+}
+
 Type *
 TypeManager::typeForLabelAtom(Atom *atom)
 {

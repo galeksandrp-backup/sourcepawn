@@ -43,12 +43,14 @@ private:
   void generateStatement(ast::Statement* stmt);
   void generateBlock(ast::BlockStatement* block);
   void generateReturn(ast::ReturnStatement* stmt);
+  void generateExprStatement(ast::ExpressionStatement* stmt);
 
   bool emit_into(sema::Expr* expr, ValueDest dest);
 
   ValueDest emit(sema::Expr* expr, ValueDest dest);
   ValueDest emitConstValue(sema::ConstValueExpr* expr, ValueDest dest);
   ValueDest emitBinary(sema::BinaryExpr* expr, ValueDest dest);
+  ValueDest emitCall(sema::CallExpr* expr, ValueDest dest);
 
 private:
   // Signal that the given register is about to be clobbered.
@@ -107,6 +109,7 @@ private:
     {}
   };
   ke::Vector<FunctionEntry> publics_;
+  ke::Vector<FunctionEntry> natives_;
 
   ke::Vector<SValue> operand_stack_;
   uint64_t pri_value_;

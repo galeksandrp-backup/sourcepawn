@@ -45,10 +45,13 @@ class SemanticAnalysis
   void visitBlockStatement(BlockStatement* node);
   void visitStatement(Statement* node);
   void visitReturnStatement(ReturnStatement* node);
+  void visitExpressionStatement(ExpressionStatement* node);
 
   sema::Expr* visitExpression(Expression* node);
   sema::ConstValueExpr* visitIntegerLiteral(IntegerLiteral* node);
   sema::BinaryExpr* visitBinaryExpression(BinaryExpression* node);
+  sema::CallExpr* visitCallExpression(ast::CallExpression* node);
+  sema::Expr* visitNameProxy(ast::NameProxy* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);
@@ -59,6 +62,7 @@ class SemanticAnalysis
   void checkCall(FunctionSignature *sig, ExpressionList *args);
 
   enum class Coercion {
+    Arg,
     Return
   };
   sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
@@ -95,6 +99,7 @@ class SemanticAnalysis
   FuncState *fs_;
 
   ke::Vector<ast::FunctionStatement*> global_functions_;
+  ke::Vector<ast::FunctionStatement*> global_natives_;
 };
 
 } // namespace sp

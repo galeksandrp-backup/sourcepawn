@@ -66,6 +66,8 @@ SmxCompiler::compile()
   // :TODO: error
   assert(publics_.length());
   qsort(publics_.buffer(), publics_.length(), sizeof(FunctionEntry), sort_functions);
+  if (natives_.length())
+    qsort(natives_.buffer(), natives_.length(), sizeof(FunctionEntry), sort_functions);
 
   assert(masm_.buffer_length() % sizeof(cell_t) == 0);
   assert(data_.size() % sizeof(cell_t) == 0);
@@ -106,6 +108,14 @@ SmxCompiler::compile()
   builder_.add(pubvars);
 
   RefPtr<SmxNativeSection> natives =  new SmxNativeSection(".natives");
+  for (size_t i = 0; i < natives_.length(); i++) {
+    const FunctionEntry& entry = natives_[i];
+
+    sp_file_natives_t& nf = natives->add();
+    nf.name = names_->add(entry.name);
+
+    __ bind_to(entry.fun->address(), (uint32_t)i);
+  }
   builder_.add(natives);
 
   return cc_.phasePassed();
@@ -142,9 +152,13 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
 void
 SmxCompiler::generateStatement(ast::Statement* stmt)
 {
+  // :TODO: track stack depth
   switch (stmt->kind()) {
     case ast::AstKind::kReturnStatement:
       generateReturn(stmt->toReturnStatement());
+      break;
+    case ast::AstKind::kExpressionStatement:
+      generateExprStatement(stmt->toExpressionStatement());
       break;
     default:
       assert(false);
@@ -167,6 +181,13 @@ SmxCompiler::generateBlock(ast::BlockStatement* block)
     ast::Statement* stmt = statements->at(i);
     generateStatement(stmt);
   }
+}
+
+void
+SmxCompiler::generateExprStatement(ast::ExpressionStatement* stmt)
+{
+  sema::Expr* expr = stmt->sema_expr();
+  emit_into(expr, ValueDest::Pri);
 }
 
 void
@@ -210,6 +231,8 @@ SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
     return emitConstValue(expr->toConstValueExpr(), dest);
   case sema::ExprKind::Binary:
     return emitBinary(expr->toBinaryExpr(), dest);
+  case sema::ExprKind::Call:
+    return emitCall(expr->toCallExpr(), dest);
   default:
     assert(false);
     return ValueDest::Error;
@@ -333,6 +356,69 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
       assert(false);
       return ValueDest::Error;
   }
+}
+
+ValueDest
+SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
+{
+  // We only support named callees right now (that is, the function cannot be
+  // stored in a variable or as the result of an expression).
+  sema::NamedFunctionExpr* callee = expr->callee()->asNamedFunctionExpr();
+  assert(callee);
+
+  FunctionSymbol* fun = callee->sym();
+  ast::FunctionSignature* sig = fun->impl()->signature();
+
+  // We have to kill pri/alt before entering the argument push sequence, since
+  // otherwise we may misalign the arguments.
+  will_kill(ValueDest::Pri);
+  will_kill(ValueDest::Alt);
+
+  // SourcePawn evaluates arguments right-to-left, probably not for any
+  // semantic reason, but because of how the original compiler worked.
+  // The authors wanted arguments to be laid out on the stack such that
+  // argument 0 would be at address +0, argument 1 at address +4, etc,
+  // probably to make handling variadic arguments slightly easier. Instead
+  // of generating a series of moves, it would instead put markers around
+  // the instruction stream where each individual argument was generated.
+  // Then, it would reorder everything in between these markers, so that
+  // everything pushed to the stack in the right order.
+  //
+  // It's not clear why this was chosen over moves - possibly it made
+  // the code generator simpler, or possibly the compiler was initially
+  // one-pass (and since it never had an AST, it wouldn't have known the
+  // argument count).
+
+  // TODO make sure we verify that call labels are bound
+  sema::ExprList* args = expr->args();
+  for (size_t i = args->length() - 1; i < args->length(); i--) {
+    sema::Expr* expr = args->at(i);
+
+    size_t opstack_size = operand_stack_.length();
+
+    emit_into(expr, ValueDest::Stack);
+
+    // Make sure emit_into does not cause any spills (or, if it did, that the
+    // spills were cleaned up internally). Otherwise the stack will be
+    // misaligned.
+    if (opstack_size != operand_stack_.length()) {
+      cc_.report(SourceLocation(), rmsg::regalloc_error) <<
+        "argument pushed too many values onto the stack";
+    }
+  }
+
+  if (sig->native()) {
+    // Mark the native as used.
+    if (!fun->impl()->address()->used())
+      natives_.append(FunctionEntry(fun->name(), fun->impl()));
+
+    __ sysreq_n(fun->impl()->address(), (uint32_t)args->length());
+    assert(fun->impl()->address()->used());
+  } else {
+    __ opcode(OP_CALL, fun->impl()->address());
+  }
+
+  return ValueDest::Pri;
 }
 
 void
