@@ -91,6 +91,52 @@ class Label
   uint32_t status_;
 };
 
+// Similar to Label, but used for mutating a single instruction to a value
+// that can only be computed later.
+class DataLabel
+{
+  static const int32_t kBound = (1 << 0);
+
+ public:
+  DataLabel()
+   : status_(0)
+  {}
+  ~DataLabel()
+  {
+    assert(!used() || bound());
+  }
+  static inline uint32_t ToOffset(uint32_t status) {
+    return status >> 1;
+  }
+
+  bool used() const {
+    return bound() || !!(status_ >> 1);
+  }
+  bool bound() const {
+    return !!(status_ & kBound);
+  }
+  uint32_t offset() const {
+    assert(bound());
+    return ToOffset(status_);
+  }
+  uint32_t status() const {
+    assert(!bound());
+    return status_;
+  }
+  void use(uint32_t pc) {
+    assert(!used() && !bound());
+    assert(pc <= INT_MAX / 2);
+    status_ = pc << 1;
+  }
+  void bind() {
+    assert(used() && !bound());
+    status_ |= kBound;
+  }
+
+ private:
+  uint32_t status_;
+};
+
 } // namespace ke
 
 #endif // _include_spcomp2_label_h_

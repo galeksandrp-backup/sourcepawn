@@ -46,6 +46,7 @@ class SemanticAnalysis
   void visitStatement(Statement* node);
   void visitReturnStatement(ReturnStatement* node);
   void visitExpressionStatement(ExpressionStatement* node);
+  void visitVarDecl(VarDecl* node);
 
   sema::Expr* visitExpression(Expression* node);
   sema::ConstValueExpr* visitIntegerLiteral(IntegerLiteral* node);
@@ -63,9 +64,11 @@ class SemanticAnalysis
 
   enum class Coercion {
     Arg,
+    Assignment,
     Return
   };
   sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
+  sema::Expr* initializer(ast::Expression* expr, Type* type);
 
  private:
   enum class ReturnStatus {
@@ -76,18 +79,18 @@ class SemanticAnalysis
 
   struct FuncState : StackLinked<FuncState>
   {
-    FunctionNode *fun;
-    FunctionSignature *sig;
-
-    // This tracks how the current control-flow path returns.
-    ReturnStatus return_status;
-
     FuncState(FuncState **prev, FunctionNode *node)
      : StackLinked<FuncState>(prev),
        fun(node),
        sig(node->signature()),
        return_status(ReturnStatus::None)
     {}
+
+    FunctionNode *fun;
+    FunctionSignature *sig;
+
+    // This tracks how the current control-flow path returns.
+    ReturnStatus return_status;
   };
 
  private:

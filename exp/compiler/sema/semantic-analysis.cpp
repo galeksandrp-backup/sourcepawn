@@ -18,6 +18,7 @@
 #include "compile-context.h"
 #include "semantic-analysis.h"
 #include "scopes.h"
+#include "symbols.h"
 
 namespace sp {
 
@@ -60,7 +61,9 @@ SemanticAnalysis::walkAST()
         break;
       }
       default:
-        assert(false);
+        cc_.report(stmt->loc(), rmsg::unimpl_kind) <<
+          "sema-ast-walk" << stmt->kindName();
+        break;
     }
     if (!cc_.canContinueProcessing())
       return false;
@@ -212,17 +215,18 @@ SemanticAnalysis::visitStatement(Statement* node)
 {
   switch (node->kind()) {
     case AstKind::kReturnStatement:
-    {
       visitReturnStatement(node->toReturnStatement());
       break;
-    }
     case AstKind::kExpressionStatement:
-    {
       visitExpressionStatement(node->toExpressionStatement());
       break;
-    }
+    case AstKind::kVarDecl:
+      visitVarDecl(node->toVarDecl());
+      break;
     default:
-      assert(false);
+      cc_.report(node->loc(), rmsg::unimpl_kind) <<
+        "sema-visit-stmt" << node->kindName();
+      break;
   }
 }
 
@@ -242,6 +246,21 @@ SemanticAnalysis::visitExpression(Expression* node)
       assert(false);
   }
   return nullptr;
+}
+
+void
+SemanticAnalysis::visitVarDecl(VarDecl* node)
+{
+  VariableSymbol* sym = node->sym();
+
+  // :TODO: unused var analysis
+
+  sema::Expr* init = nullptr;
+  if (node->initialization()) {
+    if ((init = initializer(node->initialization(), sym->type())) == nullptr)
+      return;
+    node->set_sema_init(init);
+  }
 }
 
 void
@@ -340,8 +359,15 @@ SemanticAnalysis::visitIntegerLiteral(IntegerLiteral* node)
 sema::Expr*
 SemanticAnalysis::visitNameProxy(ast::NameProxy* node)
 {
-  assert(false);
-  return nullptr;
+  Symbol* base_sym = node->sym();
+  VariableSymbol* sym = base_sym->asVariable();
+  if (!sym) {
+    cc_.report(node->loc(), rmsg::unimpl_kind) <<
+      "name-proxy-symbol" << node->kindName();
+    return nullptr;
+  }
+
+  return new (pool_) sema::VarExpr(node, sym->type(), sym);
 }
 
 sema::BinaryExpr*
@@ -376,6 +402,16 @@ SemanticAnalysis::visitBinaryExpression(BinaryExpression* node)
   }
 
   return new (pool_) sema::BinaryExpr(node, left->type(), node->token(), left, right);
+}
+
+sema::Expr*
+SemanticAnalysis::initializer(ast::Expression* node, Type* type)
+{
+  sema::Expr* expr = visitExpression(node);
+  if (!expr)
+    return nullptr;
+
+  return coerce(expr, type, Coercion::Assignment);
 }
 
 sema::Expr*

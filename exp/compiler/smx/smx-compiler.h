@@ -44,6 +44,7 @@ private:
   void generateBlock(ast::BlockStatement* block);
   void generateReturn(ast::ReturnStatement* stmt);
   void generateExprStatement(ast::ExpressionStatement* stmt);
+  void generateVarDecl(ast::VarDecl* stmt);
 
   bool emit_into(sema::Expr* expr, ValueDest dest);
 
@@ -51,6 +52,7 @@ private:
   ValueDest emitConstValue(sema::ConstValueExpr* expr, ValueDest dest);
   ValueDest emitBinary(sema::BinaryExpr* expr, ValueDest dest);
   ValueDest emitCall(sema::CallExpr* expr, ValueDest dest);
+  ValueDest emitVar(sema::VarExpr* expr, ValueDest dest);
 
 private:
   // Signal that the given register is about to be clobbered.
@@ -81,6 +83,11 @@ private:
 
   // Restore a register that was previously saved.
   void restore(uint64_t id);
+
+  // Simple assignment.
+  void store_into(VariableSymbol* sym, sema::Expr* init);
+
+  int32_t compute_storage_size(Type* type);
 
 private:
   static int sort_functions(const void *a1, const void *a2);
@@ -114,6 +121,12 @@ private:
   ke::Vector<SValue> operand_stack_;
   uint64_t pri_value_;
   uint64_t alt_value_;
+
+  // How much space needs to be reserved in STK for all local variables.
+  int32_t max_var_stk_;
+  int32_t cur_var_stk_;
+  DataLabel entry_stack_op_;
+  Label common_return_;
 };
 
 } // namespace sp

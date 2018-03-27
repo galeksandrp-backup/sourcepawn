@@ -17,6 +17,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "compile-context.h"
 #include "parser/ast.h"
+#include "scopes.h"
 #include "smx-compiler.h"
 #include <amtl/am-algorithm.h>
 #include <amtl/am-maybe.h>
@@ -26,6 +27,8 @@
 #define __ masm_.
 
 namespace sp {
+
+static bool HasSimpleCellStorage(Type* type);
 
 typedef SmxListSection<sp_file_natives_t> SmxNativeSection;
 typedef SmxListSection<sp_file_publics_t> SmxPublicSection;
@@ -39,7 +42,9 @@ SmxCompiler::SmxCompiler(CompileContext& cc, sema::Program* program)
  : cc_(cc),
    program_(program),
    pri_value_(0),
-   alt_value_(0)
+   alt_value_(0),
+   max_var_stk_(0),
+   cur_var_stk_(0)
 {
   names_ = new SmxNameTable(".names");
   builder_.add(names_);
@@ -75,7 +80,7 @@ SmxCompiler::compile()
   RefPtr<SmxCodeSection> code = new SmxCodeSection(".code");
   code->header().codesize = masm_.buffer_length();
   code->header().cellsize = sizeof(cell_t);
-  code->header().codeversion = SmxConsts::CODE_VERSION_JIT_1_1;
+  code->header().codeversion = 12;
   code->header().flags = CODEFLAG_DEBUG;
   code->header().main = 0;
   code->header().code = sizeof(sp_file_code_t);
@@ -130,10 +135,17 @@ SmxCompiler::emit(ISmxBuffer* buffer)
 void
 SmxCompiler::generate(ast::FunctionStatement* fun)
 {
+  // :TODO: move this into local state, otherwise nested functions will be hard.
+  max_var_stk_ = 0;
+  cur_var_stk_ = 0;
+
   __ bind(fun->address());
   __ opcode(OP_PROC);
+  __ opcode(OP_STACK, &entry_stack_op_);
 
   generateBlock(fun->body());
+
+  __ bind_to(&entry_stack_op_, -max_var_stk_);
 
   if (!fun->guaranteed_return()) {
     __ opcode(OP_ZERO_PRI);
@@ -160,6 +172,9 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
     case ast::AstKind::kExpressionStatement:
       generateExprStatement(stmt->toExpressionStatement());
       break;
+    case ast::AstKind::kVarDecl:
+      generateVarDecl(stmt->toVarDecl());
+      break;
     default:
       assert(false);
   }
@@ -176,10 +191,53 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
 void
 SmxCompiler::generateBlock(ast::BlockStatement* block)
 {
+  // :TODO: raii this, so for loops can use it for the init scope
+  int32_t stk_usage = cur_var_stk_;
+
   ast::StatementList* statements = block->statements();
   for (size_t i = 0; i < statements->length(); i++) {
     ast::Statement* stmt = statements->at(i);
     generateStatement(stmt);
+  }
+
+  // Commit this scope's stack usage to the frame, then drop our local usage.
+  max_var_stk_ = ke::Max(max_var_stk_, cur_var_stk_);
+  cur_var_stk_ = stk_usage;
+}
+
+void
+SmxCompiler::generateVarDecl(ast::VarDecl* stmt)
+{
+  // :TODO: assert not const
+  VariableSymbol* sym = stmt->sym();
+  int32_t size = compute_storage_size(sym->type());
+
+  switch (sym->scope()->kind()) {
+    case Scope::Block:
+      if (!ke::IsUint32AddSafe(uint32_t(size), uint32_t(cur_var_stk_))) {
+        cc_.report(stmt->loc(), rmsg::too_much_stack);
+        return;
+      }
+
+      cur_var_stk_ += size;
+      sym->allocate(StorageClass::Local, -cur_var_stk_);
+      break;
+
+    default:
+      cc_.report(stmt->loc(), rmsg::unimpl_kind) <<
+        "smx-var-scope" << int32_t(sym->scope()->kind());
+      sym->allocate(StorageClass::Local, 0);
+      break;
+  }
+
+  if (sema::Expr* init = stmt->sema_init()) {
+    if (!HasSimpleCellStorage(sym->type())) {
+      cc_.report(stmt->loc(), rmsg::unimpl_kind) <<
+        "var-decl-init", BuildTypeName(sym->type());
+      return;
+    }
+
+    store_into(sym, init);
   }
 }
 
@@ -233,8 +291,11 @@ SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
     return emitBinary(expr->toBinaryExpr(), dest);
   case sema::ExprKind::Call:
     return emitCall(expr->toCallExpr(), dest);
+  case sema::ExprKind::Var:
+    return emitVar(expr->toVarExpr(), dest);
   default:
-    assert(false);
+    cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
+      "smx-emit-expr" << expr->prettyName();
     return ValueDest::Error;
   }
 }
@@ -274,6 +335,32 @@ SmxCompiler::emitConstValue(sema::ConstValueExpr* expr, ValueDest dest)
   }
 
   return dest;
+}
+
+ValueDest
+SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
+{
+  VariableSymbol* sym = expr->sym();
+
+  switch (sym->storage()) {
+    case StorageClass::Argument:
+    case StorageClass::Local:
+      will_kill(dest);
+      if (dest == ValueDest::Pri)
+        __ opcode(OP_LOAD_S_PRI, sym->address());
+      else if (dest == ValueDest::Alt)
+        __ opcode(OP_LOAD_S_ALT, sym->address());
+      else if (dest == ValueDest::Stack)
+        __ opcode(OP_PUSH_S, sym->address());
+      else
+        assert(false);
+      return dest;
+
+    default:
+      cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
+        "emit-var-sc-kind" << int32_t(sym->storage());
+      return ValueDest::Error;
+  }
 }
 
 static inline ke::Maybe<int32_t>
@@ -515,6 +602,50 @@ SmxCompiler::restore(uint64_t id)
 
   __ opcode(op);
   *slot = 0;
+}
+
+static bool
+HasSimpleCellStorage(Type* type)
+{
+  switch (type->canonicalKind()) {
+    case Type::Kind::Primitive:
+    case Type::Kind::Enum:
+    case Type::Kind::Unchecked:
+    case Type::Kind::Function:
+    case Type::Kind::MetaFunction:
+      return true;
+    default:
+      return false;
+  }
+}
+
+void
+SmxCompiler::store_into(VariableSymbol* sym, sema::Expr* init)
+{
+  Type* type = sym->type();
+  assert(HasSimpleCellStorage(type));
+
+  switch (sym->scope()->kind()) {
+    case Scope::Block:
+      emit_into(init, ValueDest::Pri);
+      __ opcode(OP_STOR_S_PRI, sym->address());
+      break;
+
+    default:
+      cc_.report(SourceLocation(), rmsg::unimpl_kind) <<
+        "store-int-scope-kind" << int32_t(sym->scope()->kind());
+  }
+}
+
+int32_t
+SmxCompiler::compute_storage_size(Type* type)
+{
+  if (HasSimpleCellStorage(type))
+    return sizeof(cell_t);
+
+  cc_.report(SourceLocation(), rmsg::unimpl_kind) <<
+    "smx-storage-size" << int32_t(type->canonicalKind());
+  return 0;
 }
 
 int

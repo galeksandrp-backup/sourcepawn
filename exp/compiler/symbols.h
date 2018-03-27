@@ -132,14 +132,14 @@ class VariableSymbol : public Symbol
     assert(!type_ || type_->isUnresolvable());
     type_ = type;
   }
-  void allocate(StorageClass storage, intptr_t address) {
+  void allocate(StorageClass storage, int32_t address) {
     storage_ = storage;
     address_ = address;
   }
   StorageClass storage() const {
     return storage_;
   }
-  intptr_t address() const {
+  int32_t address() const {
     assert(storage() != StorageClass::Unknown);
     return address_;
   }
@@ -207,7 +207,7 @@ class VariableSymbol : public Symbol
  private:
   StorageClass storage_;
   StorageFlags storage_flags_;
-  intptr_t address_;
+  int32_t address_;
   Type *type_;
   BoxedValue constant_;
 };

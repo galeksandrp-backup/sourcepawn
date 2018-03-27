@@ -23,8 +23,9 @@
 
 namespace sp {
 
-class FunctionSymbol;
 class Type;
+class FunctionSymbol;
+class VariableSymbol;
 
 namespace ast {
 class Expression;
@@ -37,6 +38,7 @@ namespace sema {
   _(Call)                 \
   _(ConstValue)           \
   _(NamedFunction)        \
+  _(Var)                  \
   /* terminator */
 
 // Forward declarations.
@@ -62,6 +64,9 @@ public:
 
   Type* type() const {
     return type_;
+  }
+  ast::Expression* src() const {
+    return node_;
   }
   virtual ExprKind kind() const = 0;
   virtual const char* prettyName() const = 0;
@@ -192,6 +197,26 @@ class CallExpr final : public Expr
  private:
   Expr* callee_;
   ExprList* args_;
+};
+
+class VarExpr final : public Expr
+{
+ public:
+  explicit VarExpr(ast::Expression* node,
+                   Type* type,
+                   VariableSymbol* sym)
+   : Expr(node, type),
+     sym_(sym)
+  {}
+
+  DECLARE_SEMA(Var)
+
+  VariableSymbol* sym() const {
+    return sym_;
+  }
+
+ private:
+  VariableSymbol* sym_;
 };
 
 #undef DECLARE_SEMA

@@ -561,6 +561,7 @@ Parser::primitive()
       return new (pool_) ThisExpression(scanner_.begin());
 
     case TOK_LBRACE:
+      // :TODO: only allow this from initializers
       return parseCompoundLiteral();
 
     default:

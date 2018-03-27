@@ -145,11 +145,14 @@ RMSG(typedef_must_be_fun,           type,              "typedefs may only be use
 RMSG(typeset_must_only_have_fun,    type,              "typesets should only contain function types")
 RMSG(callee_is_not_function,        type,              "callee must be a named global function")
 
+RMSG(too_much_stack,                impl,              "function uses too much stack space")
+
 RMSG(int_literal_out_of_range,      syntax,            "integer literal is out of range")
 
 RMSG(non_public_not_supported,      impl,              "non-public functions are not yet supported")
 RMSG(argcount_not_supported,        impl,              "argument count not supported")
 RMSG(regalloc_error,                fatal,             "regalloc internal error: %0")
+RMSG(unimpl_kind,                   impl,              "unimplemented %0: %1")
 
 //MSG(NotAllPathsReturnValue,         SyntaxError,            "not all paths through function return a value")
 //MSG(UsedVoidReturn,                 SyntaxError,            "value returned, but function is void")

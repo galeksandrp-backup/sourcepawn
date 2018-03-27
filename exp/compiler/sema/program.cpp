@@ -62,6 +62,21 @@ class SemaPrinter : public ast::StrictAstVisitor
     unindent();
   }
 
+  void visitVarDecl(ast::VarDecl* stmt) override {
+     prefix();
+     fprintf(fp_, "- VarDecl: %s\n", BuildTypeName(stmt->sym()->type(), stmt->sym()->name()).chars());
+     indent();
+     {
+       prefix();
+       fprintf(fp_, "=\n");
+       if (sema::Expr* expr = stmt->sema_init()) {
+         prefix();
+         printExpr(expr);
+       }
+     }
+     unindent();
+  }
+
   void visitReturnStatement(ast::ReturnStatement* stmt) override {
     prefix();
     fprintf(fp_, "- ReturnStatement\n");
@@ -99,6 +114,9 @@ class SemaPrinter : public ast::StrictAstVisitor
         break;
       case sema::ExprKind::NamedFunction:
         printNamedFunction(expr->toNamedFunctionExpr());
+        break;
+      case sema::ExprKind::Var:
+        printVar(expr->toVarExpr());
         break;
       default:
         assert(false);
@@ -148,6 +166,15 @@ class SemaPrinter : public ast::StrictAstVisitor
       printExpr(expr->right());
     }
     unindent();
+  }
+
+  void printVar(sema::VarExpr* expr) {
+    prefix();
+    AString str = BuildTypeName(expr->type(), nullptr);
+    fprintf(fp_, "- %s %s (%s)\n",
+      expr->prettyName(),
+      expr->sym()->name()->chars(),
+      str.chars());
   }
 
   void dump(const BoxedValue& value) {

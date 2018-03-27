@@ -262,6 +262,7 @@ class VarDecl : public Statement
    : Statement(name.start),
      name_(name.atom),
      initialization_(initialization),
+     sema_init_(nullptr),
      sym_(nullptr),
      next_(nullptr)
   {
@@ -271,6 +272,12 @@ class VarDecl : public Statement
 
   Expression *initialization() const {
     return initialization_;
+  }
+  sema::Expr* sema_init() const {
+    return sema_init_;
+  }
+  void set_sema_init(sema::Expr* init) {
+    sema_init_ = init;
   }
   Atom *name() const {
     return name_;
@@ -309,6 +316,7 @@ class VarDecl : public Statement
  private:
   Atom *name_;
   Expression *initialization_;
+  sema::Expr* sema_init_;
   TypeExpr te_;
   VariableSymbol *sym_;
   VarDecl *next_;

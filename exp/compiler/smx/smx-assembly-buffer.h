@@ -41,6 +41,11 @@ class SmxAssemblyBuffer : public AssemblyBuffer
     write<cell_t>(static_cast<cell_t>(op));
     encodeAbsoluteAddress(address);
   }
+  void opcode(OPCODE op, DataLabel* value) {
+    write<cell_t>(static_cast<cell_t>(op));
+    write<cell_t>(static_cast<cell_t>(0xb0b0b0b0));
+    value->use(pc());
+  }
 
   void sysreq_n(Label* address, uint32_t nparams) {
     write<cell_t>(static_cast<cell_t>(OP_SYSREQ_N));
@@ -73,6 +78,23 @@ class SmxAssemblyBuffer : public AssemblyBuffer
       *p = value;
     }
     target->bind(value);
+  }
+  void bind_to(DataLabel* target, cell_t value) {
+    if (outOfMemory()) {
+      // If we ran out of memory, the code stream is potentially invalid and
+      // we cannot use the embedded linked list.
+      target->bind();
+      return;
+    }
+
+    uint32_t offset = DataLabel::ToOffset(target->status());
+    assert(offset >= 4 && offset <= pc());
+
+    int32_t* p = reinterpret_cast<int32_t*>(buffer() + offset - 4);
+    assert(*p == 0xb0b0b0b0);
+    *p = value;
+
+    target->bind();
   }
 
  private:
