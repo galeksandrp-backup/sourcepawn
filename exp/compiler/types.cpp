@@ -193,6 +193,7 @@ sp::GetPrimitiveName(PrimitiveType type)
       return "char";
     case PrimitiveType::Float:
       return "float";
+#if 0
     case PrimitiveType::Double:
       return "double";
     case PrimitiveType::Int8:
@@ -203,8 +204,10 @@ sp::GetPrimitiveName(PrimitiveType type)
       return "int16";
     case PrimitiveType::Uint16:
       return "uint16";
+#endif
     case PrimitiveType::Int32:
       return "int";
+#if 0
     case PrimitiveType::Uint32:
       return "uint";
     case PrimitiveType::Int64:
@@ -215,6 +218,7 @@ sp::GetPrimitiveName(PrimitiveType type)
       return "intn";
     case PrimitiveType::NativeUint:
       return "uintn";
+#endif
     default:
       assert(false);
       return "unknown";
