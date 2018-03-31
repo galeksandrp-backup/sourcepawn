@@ -46,13 +46,20 @@ private:
   void generateExprStatement(ast::ExpressionStatement* stmt);
   void generateVarDecl(ast::VarDecl* stmt);
 
+  // Emit an expression into the given destination, returning false on failure.
   bool emit_into(sema::Expr* expr, ValueDest dest);
 
+  // Low-level expression functions. These take in a destination and use it if
+  // a specialized opcode is available - otherwise, they generally emit into
+  // PRI. The actual value location is returned. Use emit_into to force a
+  // final destination.
   ValueDest emit(sema::Expr* expr, ValueDest dest);
   ValueDest emitConstValue(sema::ConstValueExpr* expr, ValueDest dest);
   ValueDest emitBinary(sema::BinaryExpr* expr, ValueDest dest);
+  ValueDest emitUnary(sema::UnaryExpr* expr, ValueDest dest);
   ValueDest emitCall(sema::CallExpr* expr, ValueDest dest);
   ValueDest emitVar(sema::VarExpr* expr, ValueDest dest);
+  ValueDest emitTrivialCast(sema::TrivialCastExpr* expr, ValueDest dest);
 
 private:
   // Signal that the given register is about to be clobbered.

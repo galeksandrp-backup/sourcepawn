@@ -53,6 +53,7 @@ class SemanticAnalysis
   sema::BinaryExpr* visitBinaryExpression(BinaryExpression* node);
   sema::CallExpr* visitCallExpression(ast::CallExpression* node);
   sema::Expr* visitNameProxy(ast::NameProxy* node);
+  sema::Expr* visitUnaryExpression(ast::UnaryExpression* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);
@@ -68,6 +69,10 @@ class SemanticAnalysis
     Return
   };
   sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
+  sema::Expr* coerce_inner(sema::Expr* from_expr,
+                           Type* from,
+                           Type* to,
+                           Coercion context);
   sema::Expr* initializer(ast::Expression* expr, Type* type);
 
  private:

@@ -109,6 +109,9 @@ class SemaPrinter : public ast::StrictAstVisitor
       case sema::ExprKind::Binary:
         printBinary(expr->toBinaryExpr());
         break;
+      case sema::ExprKind::Unary:
+        printUnary(expr->toUnaryExpr());
+        break;
       case sema::ExprKind::Call:
         printCall(expr->toCallExpr());
         break;
@@ -117,6 +120,9 @@ class SemaPrinter : public ast::StrictAstVisitor
         break;
       case sema::ExprKind::Var:
         printVar(expr->toVarExpr());
+        break;
+      case sema::ExprKind::TrivialCast:
+        printTrivialCast(expr->toTrivialCastExpr());
         break;
       default:
         assert(false);
@@ -164,6 +170,26 @@ class SemaPrinter : public ast::StrictAstVisitor
       fprintf(fp_, "\"%s\"\n", TokenNames[expr->token()]);
       printExpr(expr->left());
       printExpr(expr->right());
+    }
+    unindent();
+  }
+
+  void printUnary(sema::UnaryExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "\"%s\"\n", TokenNames[expr->token()]);
+      printExpr(expr->expr());
+    }
+    unindent();
+  }
+
+  void printTrivialCast(sema::TrivialCastExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      printExpr(expr->expr());
     }
     unindent();
   }

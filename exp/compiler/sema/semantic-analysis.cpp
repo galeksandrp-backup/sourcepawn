@@ -25,6 +25,8 @@ namespace sp {
 using namespace ke;
 using namespace ast;
 
+// :TODO: constant folding
+
 SemanticAnalysis::SemanticAnalysis(CompileContext &cc, TranslationUnit *tu)
  : cc_(cc),
    pool_(cc.pool()),
@@ -242,6 +244,8 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitCallExpression(node->toCallExpression());
     case AstKind::kNameProxy:
       return visitNameProxy(node->toNameProxy());
+    case AstKind::kUnaryExpression:
+      return visitUnaryExpression(node->toUnaryExpression());
     default:
       assert(false);
   }
@@ -383,25 +387,49 @@ SemanticAnalysis::visitBinaryExpression(BinaryExpression* node)
 
   assert(left->type() == right->type());
 
+  Type* type = nullptr;
   switch (node->token()) {
-  case TOK_PLUS:
-  case TOK_MINUS:
-  case TOK_STAR:
-  case TOK_SLASH:
-  case TOK_PERCENT:
-  case TOK_AMPERSAND:
-  case TOK_BITOR:
-  case TOK_BITXOR:
-  case TOK_SHR:
-  case TOK_USHR:
-  case TOK_SHL:
-    break;
-  default:
-    assert(false);
-    break;
+    case TOK_PLUS:
+    case TOK_MINUS:
+    case TOK_STAR:
+    case TOK_SLASH:
+    case TOK_PERCENT:
+    case TOK_AMPERSAND:
+    case TOK_BITOR:
+    case TOK_BITXOR:
+    case TOK_SHR:
+    case TOK_USHR:
+    case TOK_SHL:
+      type = left->type();
+      break;
+    case TOK_EQUALS:
+    case TOK_NOTEQUALS:
+    case TOK_GT:
+    case TOK_GE:
+    case TOK_LT:
+    case TOK_LE:
+      type = types_->getPrimitive(PrimitiveType::Bool);
+      break;
+    default:
+      cc_.report(node->loc(), rmsg::unimpl_kind) <<
+        "sema-bin-token" << TokenNames[node->token()];
+      return nullptr;
   }
 
-  return new (pool_) sema::BinaryExpr(node, left->type(), node->token(), left, right);
+  return new (pool_) sema::BinaryExpr(node, type, node->token(), left, right);
+}
+
+sema::Expr*
+SemanticAnalysis::visitUnaryExpression(ast::UnaryExpression* node)
+{
+  sema::Expr* expr = visitExpression(node->expression());
+  if (!expr)
+    return nullptr;
+
+  Type* type = expr->type();
+  assert(type->primitive() == PrimitiveType::Int32);
+
+  return new (pool_) sema::UnaryExpr(node, type, node->token(), expr);
 }
 
 sema::Expr*
@@ -422,12 +450,34 @@ SemanticAnalysis::coerce(sema::Expr* expr, Type* to, Coercion context)
   if (from == to)
     return expr;
 
-  if (from->isPrimitive() && to->isPrimitive()) {
+  sema::Expr* result = coerce_inner(expr, from, to, context);
+  if (!result) {
+    cc_.report(expr->src()->loc(), rmsg::cannot_coerce) << from << to;
+    return nullptr;
+
+  }
+  return result;
+}
+
+sema::Expr*
+SemanticAnalysis::coerce_inner(sema::Expr* expr,
+                               Type* from,
+                               Type* to,
+                               Coercion context)
+{
+  if (to->isPrimitive()) {
+    if (!from->isPrimitive())
+      return nullptr;
     if (from->primitive() == to->primitive())
       return expr;
+    if (from->primitive() == PrimitiveType::Bool ||
+        from->primitive() == PrimitiveType::Char)
+    {
+      return new (pool_) sema::TrivialCastExpr(expr->src(), to, expr);
+    }
+    return nullptr;
   }
 
-  assert(false);
   return nullptr;
 }
 

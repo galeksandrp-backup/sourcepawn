@@ -35,10 +35,12 @@ namespace sema {
 
 #define SEMA_KIND_LIST(_) \
   _(Binary)               \
+  _(Unary)                \
   _(Call)                 \
   _(ConstValue)           \
   _(NamedFunction)        \
   _(Var)                  \
+  _(TrivialCast)          \
   /* terminator */
 
 // Forward declarations.
@@ -151,6 +153,52 @@ class BinaryExpr final : public Expr
   TokenKind token_;
   Expr* left_;
   Expr* right_;
+};
+
+class UnaryExpr final : public Expr
+{
+ public:
+  explicit UnaryExpr(ast::Expression* node,
+                     Type* type,
+                     TokenKind tok,
+                     Expr* expr)
+   : Expr(node, type),
+     token_(tok),
+     expr_(expr)
+  {}
+
+  DECLARE_SEMA(Unary)
+
+  TokenKind token() const {
+    return token_;
+  }
+  Expr* expr() const {
+    return expr_;
+  }
+
+ private:
+  TokenKind token_;
+  Expr* expr_;
+};
+
+class TrivialCastExpr final : public Expr
+{
+ public:
+  explicit TrivialCastExpr(ast::Expression* node,
+                           Type* type,
+                           Expr* expr)
+   : Expr(node, type),
+     expr_(expr)
+  {}
+
+  DECLARE_SEMA(TrivialCast)
+
+  Expr* expr() const {
+    return expr_;
+  }
+
+ private:
+  Expr* expr_;
 };
 
 class NamedFunctionExpr final : public Expr

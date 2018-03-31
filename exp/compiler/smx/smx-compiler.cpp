@@ -277,7 +277,14 @@ SmxCompiler::emit_into(sema::Expr* expr, ValueDest dest)
     return true;
   }
 
-  assert(false);
+  assert(dest == ValueDest::Stack);
+  if (actual == ValueDest::Pri)
+    __ opcode(OP_PUSH_PRI);
+  else if (actual == ValueDest::Alt)
+    __ opcode(OP_PUSH_ALT);
+  else
+    assert(false);
+
   return true;
 }
 
@@ -289,10 +296,14 @@ SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
     return emitConstValue(expr->toConstValueExpr(), dest);
   case sema::ExprKind::Binary:
     return emitBinary(expr->toBinaryExpr(), dest);
+  case sema::ExprKind::Unary:
+    return emitUnary(expr->toUnaryExpr(), dest);
   case sema::ExprKind::Call:
     return emitCall(expr->toCallExpr(), dest);
   case sema::ExprKind::Var:
     return emitVar(expr->toVarExpr(), dest);
+  case sema::ExprKind::TrivialCast:
+    return emitTrivialCast(expr->toTrivialCastExpr(), dest);
   default:
     cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
       "smx-emit-expr" << expr->prettyName();
@@ -390,28 +401,50 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
   Maybe<int32_t> left_i32 = MaybeConstInt32(left);
   Maybe<int32_t> right_i32 = MaybeConstInt32(right);
 
+  // Special case SHL since it has a specific optimization and it's gross to
+  // fall-through case statements in a complex switch.
+  if (expr->token() == TOK_SHL && right_i32) {
+    // If we don't have to push to the stack, we can pick exactly which
+    // register was requested.
+    ValueDest actual = (dest == ValueDest::Stack)
+                       ? ValueDest::Pri
+                       : dest;
+    if (!emit_into(left, actual))
+      return ValueDest::Error;
+
+    if (actual == ValueDest::Pri)
+      __ opcode(OP_SHL_C_PRI, *right_i32);
+    else
+      __ opcode(OP_SHL_C_ALT, *right_i32);
+    return actual;
+  }
+
   switch (expr->token()) {
     case TOK_PLUS:
     case TOK_STAR:
+    case TOK_EQUALS:
     {
-      // Try to get left=expr and right=const for ADD.C.
-      if (left_i32) {
+      // Try to get left=expr and right=const for commutative operations.
+      if (left_i32 && !right_i32 &&
+          (expr->token() == TOK_PLUS || expr->token() == TOK_STAR))
+      {
         ke::Swap(left, right);
         ke::Swap(left_i32, right_i32);
       }
 
       if (!emit_into(left, ValueDest::Pri))
         return ValueDest::Error;
+
+      // Use .C variants.
       if (right_i32) {
         if (expr->token() == TOK_PLUS)
           __ opcode(OP_ADD_C, *right_i32);
         else if (expr->token() == TOK_STAR)
           __ opcode(OP_SMUL_C, *right_i32);
+        else if (expr->token() == TOK_EQUALS)
+          __ opcode(OP_EQ_C_PRI, *right_i32);
         return ValueDest::Pri;
       }
-
-      // untested
-      assert(false);
 
       uint64_t saved_pri = save(ValueDest::Pri);
       if (!emit_into(right, ValueDest::Alt))
@@ -422,10 +455,43 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
         __ opcode(OP_ADD);
       else if (expr->token() == TOK_STAR)
         __ opcode(OP_SMUL);
+      else if (expr->token() == TOK_EQUALS)
+        __ opcode(OP_EQ);
+      return ValueDest::Pri;
+    }
+
+    case TOK_SLASH:
+    {
+      // SDIV = pri / alt
+      // SDIV_ALT = alt / pri
+      //
+      // Does it ever make sense to emit SDIV_ALT, if we have knowledge that
+      // pri or alt might be spilled?
+
+      if (!emit_into(left, ValueDest::Pri))
+        return ValueDest::Error;
+
+      uint64_t saved_pri = save(ValueDest::Pri);
+      if (!emit_into(right, ValueDest::Alt))
+        return ValueDest::Error;
+      restore(saved_pri);
+
+      __ opcode(OP_SDIV);
       return ValueDest::Pri;
     }
 
     case TOK_MINUS:
+    case TOK_BITOR:
+    case TOK_BITXOR:
+    case TOK_BITAND:
+    case TOK_SHL:
+    case TOK_SHR:
+    case TOK_USHR:
+    case TOK_NOTEQUALS:
+    case TOK_GT:
+    case TOK_GE:
+    case TOK_LT:
+    case TOK_LE:
     {
       if (!emit_into(left, ValueDest::Pri))
         return ValueDest::Error;
@@ -435,14 +501,97 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
         return ValueDest::Error;
       restore(saved_pri);
 
-      __ opcode(OP_SUB);
+      switch (expr->token()) {
+        case TOK_MINUS:
+          __ opcode(OP_SUB);
+          break;
+        case TOK_BITOR:
+          __ opcode(OP_OR);
+          break;
+        case TOK_BITXOR:
+          __ opcode(OP_XOR);
+          break;
+        case TOK_BITAND:
+          __ opcode(OP_AND);
+          break;
+        case TOK_SHL:
+          __ opcode(OP_SHL);
+          break;
+        case TOK_SHR:
+          __ opcode(OP_SSHR);
+          break;
+        case TOK_USHR:
+          __ opcode(OP_SHR);
+          break;
+        case TOK_NOTEQUALS:
+          __ opcode(OP_NEQ);
+          break;
+        case TOK_GT:
+          __ opcode(OP_SGRTR);
+          break;
+        case TOK_GE:
+          __ opcode(OP_SGEQ);
+          break;
+        case TOK_LT:
+          __ opcode(OP_SLESS);
+          break;
+        case TOK_LE:
+          __ opcode(OP_SLEQ);
+          break;
+        default:
+          assert(false);
+          break;
+      }
       return ValueDest::Pri;
     }
 
     default:
-      assert(false);
+      cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
+        "smx-binexpr-tok" << TokenNames[expr->token()];
       return ValueDest::Error;
   }
+}
+
+ValueDest
+SmxCompiler::emitUnary(sema::UnaryExpr* expr, ValueDest dest)
+{
+  sema::Expr* inner = expr->expr();
+
+  switch (expr->token()) {
+    case TOK_NEGATE:
+    case TOK_NOT:
+    case TOK_TILDE:
+      if (!emit_into(inner, ValueDest::Pri))
+        return ValueDest::Error;
+
+      switch (expr->token()) {
+        case TOK_NEGATE:
+          __ opcode(OP_NEG);
+          break;
+        case TOK_NOT:
+          __ opcode(OP_NOT);
+          break;
+        case TOK_TILDE:
+          __ opcode(OP_INVERT);
+          break;
+        default:
+          assert(false);
+      }
+      return ValueDest::Pri;
+
+    default:
+      cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
+        "smx-unary-tok" << TokenNames[expr->token()];
+      return ValueDest::Error;
+  }
+}
+
+ValueDest
+SmxCompiler::emitTrivialCast(sema::TrivialCastExpr* expr, ValueDest dest)
+{
+  // Pass-through - we don't generate code for trivial casts, since the
+  // bytecode is not typed.
+  return emit(expr->expr(), dest);
 }
 
 ValueDest
