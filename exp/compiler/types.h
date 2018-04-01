@@ -536,6 +536,9 @@ class ArrayType : public Type
     assert(hasFixedLength());
     return elements_;
   }
+  uint32_t nlevels() const {
+    return nlevels_;
+  }
 
   bool equalTo(ArrayType *other) {
     return elements_ == other->elements_ &&
@@ -545,6 +548,7 @@ class ArrayType : public Type
  private:
   int32_t elements_;
   Type *contained_;
+  uint32_t nlevels_;
 };
 
 class TypedefType : public Type

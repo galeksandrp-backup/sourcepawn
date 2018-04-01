@@ -65,6 +65,7 @@ private:
   ValueDest emitCall(sema::CallExpr* expr, ValueDest dest);
   ValueDest emitVar(sema::VarExpr* expr, ValueDest dest);
   ValueDest emitTrivialCast(sema::TrivialCastExpr* expr, ValueDest dest);
+  ValueDest emitString(sema::StringExpr* expr, ValueDest dest);
 
 private:
   // Signal that the given register is about to be clobbered.

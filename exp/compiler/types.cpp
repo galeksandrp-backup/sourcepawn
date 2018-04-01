@@ -88,6 +88,9 @@ ArrayType::New(Type *contained, int elements)
   ArrayType *type = new (POOL()) ArrayType(Kind::Array);
   type->contained_ = contained;
   type->elements_ = elements;
+  type->nlevels_ = contained->isArray()
+                   ? contained->toArray()->nlevels_ + 1
+                   : 1;
   return type;
 }
 

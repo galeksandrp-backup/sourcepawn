@@ -124,6 +124,9 @@ class SemaPrinter : public ast::StrictAstVisitor
       case sema::ExprKind::TrivialCast:
         printTrivialCast(expr->toTrivialCastExpr());
         break;
+      case sema::ExprKind::String:
+        printString(expr->toStringExpr());
+        break;
       default:
         assert(false);
     }
@@ -190,6 +193,29 @@ class SemaPrinter : public ast::StrictAstVisitor
     indent();
     {
       printExpr(expr->expr());
+    }
+    unindent();
+  }
+
+  void printString(sema::StringExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      // Note: this is gross because we don't print \n or \t.
+      prefix();
+      fprintf(fp_, "\"");
+      const char* ptr = expr->literal()->chars();
+      while (*ptr) {
+        if (*ptr == '\n') {
+          fprintf(fp_, "\\n");
+        } else if (*ptr == '\t') {
+          fprintf(fp_, "\\t");
+        } else {
+          fprintf(fp_, "%c", *ptr);
+        }
+        ptr++;
+      }
+      fprintf(fp_, "\"\n");
     }
     unindent();
   }

@@ -94,6 +94,8 @@ SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
   if (!node->body())
     return;
 
+  // :TODO: forbid array returns?
+
   FuncState state(&fs_, node);
   visitBlockStatement(node->body());
 
@@ -249,8 +251,12 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitNameProxy(node->toNameProxy());
     case AstKind::kUnaryExpression:
       return visitUnaryExpression(node->toUnaryExpression());
+    case AstKind::kStringLiteral:
+      return visitStringLiteral(node->toStringLiteral());
     default:
-      assert(false);
+      cc_.report(node->loc(), rmsg::unimpl_kind) <<
+        "sema-visit-expr" << node->kindName();
+      return nullptr;
   }
   return nullptr;
 }
@@ -348,7 +354,9 @@ SemanticAnalysis::visitCallExpression(CallExpression* node)
     sema::Expr* arg = visitExpression(ast_arg);
     if (!arg)
       continue;
-    if (!(arg = coerce(arg, params->at(i)->type(), Coercion::Arg)))
+
+    VarDecl* param = params->at(i);
+    if (!(arg = check_arg(arg, param)))
       continue;
     args->append(arg);
   }
@@ -445,6 +453,16 @@ SemanticAnalysis::visitUnaryExpression(ast::UnaryExpression* node)
 }
 
 sema::Expr*
+SemanticAnalysis::visitStringLiteral(ast::StringLiteral* node)
+{
+  Type* charType = types_->getPrimitive(PrimitiveType::Char);
+  Type* strType = types_->newArray(charType, node->arrayLength());
+  Type* strLitType = types_->newQualified(strType, Qualifiers::Const);
+
+  return new (pool_) sema::StringExpr(node, strLitType, node->literal());
+}
+
+sema::Expr*
 SemanticAnalysis::initializer(ast::Expression* node, Type* type)
 {
   sema::Expr* expr = visitExpression(node);
@@ -456,6 +474,63 @@ SemanticAnalysis::initializer(ast::Expression* node, Type* type)
 }
 
 sema::Expr*
+SemanticAnalysis::check_arg(sema::Expr* arg, VarDecl* param)
+{
+  Type* to = param->type();
+
+  if (to->isArray())
+    return check_array_arg(arg, param);
+
+  return coerce(arg, param->type(), Coercion::Arg);
+}
+
+sema::Expr*
+SemanticAnalysis::check_array_arg(sema::Expr* arg, VarDecl* param)
+{
+  Type* from = arg->type();
+  Type* to = param->type();
+
+  if (!from->isArray())
+    return no_conversion(arg, from, to);
+
+  if (!to->isConst() && from->isConst())
+    return no_conversion(arg, from, to);
+
+  ArrayType* to_array = to->toArray();
+  ArrayType* from_array = from->toArray();
+  if (to_array->nlevels() != from_array->nlevels())
+    return no_conversion(arg, from, to);
+
+  // All but the last array dimension must match.
+  for (size_t i = 1; i < to_array->nlevels(); i++) {
+    if (to_array->hasFixedLength() &&
+        (!from_array->hasFixedLength() ||
+         (from_array->fixedLength() != to_array->fixedLength())))
+    {
+      return no_conversion(arg, from, to);
+    }
+    to_array = to_array->contained()->toArray();
+    from_array = from_array->contained()->toArray();
+  }
+
+  assert(to_array->nlevels() == 1);
+  assert(from_array->nlevels() == 1);
+
+  if (to_array->contained() != from_array->contained())
+    return no_conversion(arg, from, to);
+
+  if (to_array->hasFixedLength() &&
+      (!from_array->hasFixedLength() ||
+        (from_array->fixedLength() != to_array->fixedLength())))
+  {
+    return no_conversion(arg, from, to);
+  }
+
+  // Everything looks good.
+  return arg;
+}
+
+sema::Expr*
 SemanticAnalysis::coerce(sema::Expr* expr, Type* to, Coercion context)
 {
   Type* from = expr->type();
@@ -463,13 +538,7 @@ SemanticAnalysis::coerce(sema::Expr* expr, Type* to, Coercion context)
   if (from == to)
     return expr;
 
-  sema::Expr* result = coerce_inner(expr, from, to, context);
-  if (!result) {
-    cc_.report(expr->src()->loc(), rmsg::cannot_coerce) << from << to;
-    return nullptr;
-
-  }
-  return result;
+  return coerce_inner(expr, from, to, context);
 }
 
 sema::Expr*
@@ -480,17 +549,27 @@ SemanticAnalysis::coerce_inner(sema::Expr* expr,
 {
   if (to->isPrimitive()) {
     if (!from->isPrimitive())
-      return nullptr;
+      return no_conversion(expr, from, to);
+
     if (from->primitive() == to->primitive())
       return expr;
+
     if (from->primitive() == PrimitiveType::Bool ||
         from->primitive() == PrimitiveType::Char)
     {
       return new (pool_) sema::TrivialCastExpr(expr->src(), to, expr);
     }
-    return nullptr;
+
+    return no_conversion(expr, from, to);
   }
 
+  return no_conversion(expr, from, to);
+}
+
+sema::Expr*
+SemanticAnalysis::no_conversion(sema::Expr* expr, Type* from, Type* to)
+{
+  cc_.report(expr->src()->loc(), rmsg::cannot_coerce) << from << to;
   return nullptr;
 }
 
@@ -530,110 +609,6 @@ SemanticAnalysis::visitCallExpr(CallExpr *node)
 
   // We mark calls as always having side effects.
   node->setHasSideEffects();
-}
-#endif
-
-void
-SemanticAnalysis::checkCall(FunctionSignature *sig, ExpressionList *args)
-{
-  VarDecl *vararg = nullptr;
-  for (size_t i = 0; i < args->length(); i++) {
-    Expression *expr = args->at(i);
-
-    VarDecl *arg = nullptr;
-    if (i >= sig->parameters()->length()) {
-      if (!vararg) {
-        cc_.report(expr->loc(), rmsg::wrong_argcount)
-          << args->length(), sig->parameters()->length();
-        return;
-      }
-      arg = vararg;
-    } else {
-      arg = sig->parameters()->at(i);
-    }
-    (void)arg;
-
-#if 0
-    visitForValue(expr);
-
-    Coercion cr(cc_,
-                Coercion::Reason::arg,
-                expr,
-                arg->te().resolved());
-    if (cr.coerce() != Coercion::Result::ok) {
-      auto builder = cc_.report(expr->loc(), rmsg::cannot_coerce_for_arg)
-        << expr->type()
-        << arg->te().resolved();
-
-      if (i < args->length() && arg->name())
-        builder << arg->name();
-      else
-        builder << i;
-
-      builder << cr.diag(expr->loc());
-      break;
-    }
-
-    // Rewrite the tree for the coerced result.
-    args->at(i) = cr.output();
-#endif
-  }
-}
-
-#if 0
-void
-SemanticAnalysis::visitNameProxy(NameProxy *proxy)
-{
-  Symbol *binding = proxy->sym();
-  switch (binding->kind()) {
-    case Symbol::kType:
-      cc_.report(proxy->loc(), rmsg::cannot_use_type_as_value)
-        << binding->asType()->type();
-      break;
-
-    case Symbol::kConstant:
-    {
-      //ConstantSymbol *sym = binding->toConstant();
-      //proxy->setOutput(sym->type(), VK::rvalue);
-      break;
-    }
-
-    case Symbol::kFunction:
-    {
-      FunctionSymbol *sym = binding->toFunction();
-      FunctionStatement *decl = sym->impl();
-      if (!decl) {
-        cc_.report(proxy->loc(), rmsg::function_has_no_impl)
-          << sym->name();
-        break;
-      }
-
-      if (!decl->type())
-        decl->setType(FunctionType::New(decl->signature()));
-
-      // Function symbols are clvalues, since they are named.
-      // :TODO:
-      proxy->setOutput(decl->type(), VK::lvalue);
-      break;
-    }
-
-    default:
-      assert(false);
-  }
-}
-#endif
-
-#if 0
-void
-SemanticAnalysis::visitStringLiteral(StringLiteral *node)
-{
-  // Build a constant array for the character string.
-  Type *charType = types_->getPrimitive(PrimitiveType::Char);
-  ArrayType *arrayType = types_->newArray(charType, node->arrayLength());
-  Type *litType = types_->newQualified(arrayType, Qualifiers::Const);
-
-  // Returned value is always an rvalue.
-  node->setOutput(litType, VK::rvalue);
 }
 #endif
 

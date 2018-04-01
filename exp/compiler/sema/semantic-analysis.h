@@ -54,6 +54,7 @@ class SemanticAnalysis
   sema::CallExpr* visitCallExpression(ast::CallExpression* node);
   sema::Expr* visitNameProxy(ast::NameProxy* node);
   sema::Expr* visitUnaryExpression(ast::UnaryExpression* node);
+  sema::Expr* visitStringLiteral(ast::StringLiteral* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);
@@ -61,7 +62,8 @@ class SemanticAnalysis
   bool matchForwardSignatures(FunctionSignature *fwdSig, FunctionSignature *implSig);
   bool matchForwardReturnTypes(Type *fwdRetType, Type *implRetType);
 
-  void checkCall(FunctionSignature *sig, ExpressionList *args);
+  sema::Expr* check_arg(sema::Expr* arg, VarDecl* param);
+  sema::Expr* check_array_arg(sema::Expr* arg, VarDecl* param);
 
   enum class Coercion {
     Arg,
@@ -74,6 +76,9 @@ class SemanticAnalysis
                            Type* to,
                            Coercion context);
   sema::Expr* initializer(ast::Expression* expr, Type* type);
+
+  // No-op function to breakpoint on type errors.
+  sema::Expr* no_conversion(sema::Expr* expr, Type* from, Type* to);
 
  private:
   enum class ReturnStatus {

@@ -313,6 +313,8 @@ SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
     return emitVar(expr->toVarExpr(), dest);
   case sema::ExprKind::TrivialCast:
     return emitTrivialCast(expr->toTrivialCastExpr(), dest);
+  case sema::ExprKind::String:
+    return emitString(expr->toStringExpr(), dest);
   default:
     cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
       "smx-emit-expr" << expr->prettyName();
@@ -363,6 +365,9 @@ SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
   VariableSymbol* sym = expr->sym();
 
   assert(sym->type()->isPrimitive());
+
+  // :TODO: inline these
+  assert(!sym->isConstExpr());
 
   switch (sym->storage()) {
     case StorageClass::Argument:
@@ -710,6 +715,50 @@ SmxCompiler::generateData(ast::VarDecl* decl)
       break;
     }
   }
+}
+
+ValueDest
+SmxCompiler::emitString(sema::StringExpr* expr, ValueDest dest)
+{
+  Atom* literal = expr->literal();
+  const char* raw = literal->chars();
+
+  // The array size should be bytes + 1, for the null terminator.
+  assert(expr->type()->toArray()->fixedLength() == literal->length() + 1);
+
+  // Allocations must be in increments of cells.
+  size_t leftover = Align(literal->length() + 1, sizeof(cell_t)) - (literal->length() + 1);
+  assert(leftover < sizeof(cell_t));
+
+  int32_t address = int32_t(data_.pos());
+
+  // Write the string, make sure we're still aligned after. Note we don't do
+  // string coalescing (yet), it would work for general cases but not this:
+  //
+  //    void blah(char[] a="")
+  //
+  // In this case we need to guarantee a new literal copy each time the
+  // default argument is used. We should be able to mark the StringExpr
+  // as coalescable and fix this in the future.
+  data_.write(raw, literal->length() + 1);
+  for (size_t i = 0; i < leftover; i++)
+    data_.write<uint8_t>(0);
+  assert(ke::IsAligned(data_.size(), sizeof(cell_t)));
+
+  // Finally we can push the value. 
+  will_kill(dest);
+  switch (dest) {
+    case ValueDest::Pri:
+      __ opcode(OP_CONST_PRI, address);
+      break;
+    case ValueDest::Alt:
+      __ opcode(OP_CONST_ALT, address);
+      break;
+    case ValueDest::Stack:
+      __ opcode(OP_PUSH_C, address);
+      break;
+  }
+  return dest;
 }
 
 void

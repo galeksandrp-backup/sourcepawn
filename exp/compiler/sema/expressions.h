@@ -41,6 +41,7 @@ namespace sema {
   _(NamedFunction)        \
   _(Var)                  \
   _(TrivialCast)          \
+  _(String)               \
   /* terminator */
 
 // Forward declarations.
@@ -272,6 +273,26 @@ class VarExpr final : public Expr
 
  private:
   VariableSymbol* sym_;
+};
+
+class StringExpr final : public Expr
+{
+ public:
+  explicit StringExpr(ast::Expression* node,
+                      Type* type,
+                      Atom* literal)
+   : Expr(node, type),
+     literal_(literal)
+  {}
+
+  DECLARE_SEMA(String)
+
+  Atom* literal() const {
+    return literal_;
+  }
+
+ private:
+  Atom* literal_;
 };
 
 #undef DECLARE_SEMA
