@@ -184,8 +184,16 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
     case ast::AstKind::kVarDecl:
       generateVarDecl(stmt->toVarDecl());
       break;
+    case ast::AstKind::kWhileStatement:
+      generateWhile(stmt->toWhileStatement());
+      break;
+    case ast::AstKind::kBlockStatement:
+      generateBlock(stmt->toBlockStatement());
+      break;
     default:
-      assert(false);
+      cc_.report(stmt->loc(), rmsg::unimpl_kind) <<
+        "smx-gen-stmt" << stmt->kindName();
+      return;
   }
 
   // If compilation is going okay, the operand stack should be empty.
@@ -262,6 +270,36 @@ SmxCompiler::generateReturn(ast::ReturnStatement* stmt)
 {
   emit_into(stmt->sema_expr(), ValueDest::Pri);
   __ opcode(OP_RETN);
+}
+
+void
+SmxCompiler::generateWhile(ast::WhileStatement* stmt)
+{
+  sema::Expr* cond = stmt->sema_cond();
+
+  TestContext cx;
+  if (stmt->token() == TOK_WHILE) {
+    // if !<cond> goto done
+    // repeat:
+    //   <body>
+    //   jump repeat
+    // done:
+    test(cond, false, cx);
+    __ bind(&cx.fallthrough);
+    generateStatement(stmt->body());
+    __ opcode(OP_JUMP, &cx.fallthrough);
+    __ bind(&cx.taken);
+  } else {
+    // repeat:
+    //   <body>
+    //   if <cond> goto repeat
+    // done:
+    assert(stmt->token() == TOK_DO);
+    __ bind(&cx.taken);
+    generateStatement(stmt->body());
+    test(cond, true, cx);
+    __ bind(&cx.fallthrough);
+  }
 }
 
 bool
@@ -488,26 +526,6 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
       return ValueDest::Pri;
     }
 
-    case TOK_SLASH:
-    {
-      // SDIV = pri / alt
-      // SDIV_ALT = alt / pri
-      //
-      // Does it ever make sense to emit SDIV_ALT, if we have knowledge that
-      // pri or alt might be spilled?
-
-      if (!emit_into(left, ValueDest::Pri))
-        return ValueDest::Error;
-
-      uint64_t saved_pri = save(ValueDest::Pri);
-      if (!emit_into(right, ValueDest::Alt))
-        return ValueDest::Error;
-      restore(saved_pri);
-
-      __ opcode(OP_SDIV);
-      return ValueDest::Pri;
-    }
-
     case TOK_MINUS:
     case TOK_BITOR:
     case TOK_BITXOR:
@@ -520,14 +538,10 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
     case TOK_GE:
     case TOK_LT:
     case TOK_LE:
+    case TOK_SLASH:
     {
-      if (!emit_into(left, ValueDest::Pri))
+      if (!load_both(left, right))
         return ValueDest::Error;
-
-      uint64_t saved_pri = save(ValueDest::Pri);
-      if (!emit_into(right, ValueDest::Alt))
-        return ValueDest::Error;
-      restore(saved_pri);
 
       switch (expr->token()) {
         case TOK_MINUS:
@@ -565,6 +579,9 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
           break;
         case TOK_LE:
           __ opcode(OP_SLEQ);
+          break;
+        case TOK_SLASH:
+          __ opcode(OP_SDIV);
           break;
         default:
           assert(false);
@@ -759,6 +776,71 @@ SmxCompiler::emitString(sema::StringExpr* expr, ValueDest dest)
       break;
   }
   return dest;
+}
+
+static inline OPCODE
+BinaryOpHasInlineTest(TokenKind kind)
+{
+  switch (kind) {
+    case TOK_EQUALS:
+      return OP_JEQ;
+    case TOK_NOTEQUALS:
+      return OP_JNEQ;
+    default:
+      return OP_NOP;
+  }
+}
+
+static inline OPCODE
+InvertTestOp(OPCODE op)
+{
+  switch (op) {
+    case OP_JEQ:
+      return OP_JNEQ;
+    case OP_JNEQ:
+      return OP_JEQ;
+    default:
+      assert(false);
+      return OP_NOP;
+  }
+}
+
+void
+SmxCompiler::test(sema::Expr* expr, bool jumpOnTrue, TestContext& cx)
+{
+  if (sema::BinaryExpr* bin = expr->asBinaryExpr()) {
+    OPCODE op = BinaryOpHasInlineTest(bin->token());
+    if (op != OP_NOP) {
+      if (!jumpOnTrue)
+        op = InvertTestOp(op);
+      
+      load_both(bin->left(), bin->right());
+      __ opcode(op, &cx.taken);
+      return;
+    }
+  }
+
+  if (!emit_into(expr, ValueDest::Pri))
+    return;
+
+  if (jumpOnTrue)
+    __ opcode(OP_JNZ, &cx.taken);
+  else
+    __ opcode(OP_JZER, &cx.taken);
+}
+
+bool
+SmxCompiler::load_both(sema::Expr* left, sema::Expr* right)
+{
+  if (!emit_into(left, ValueDest::Pri))
+    return false;
+
+  uint64_t saved_pri = save(ValueDest::Pri);
+  if (!emit_into(right, ValueDest::Alt))
+    return false;
+
+  restore(saved_pri);
+  return true;
 }
 
 void

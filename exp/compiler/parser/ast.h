@@ -897,6 +897,16 @@ class WhileStatement : public Statement
   Statement *body() const {
     return body_;
   }
+
+  sema::Expr* sema_cond() const {
+    return sema_cond_;
+  }
+  void set_sema_cond(sema::Expr* expr) {
+    sema_cond_ = expr;
+  }
+
+ private:
+  sema::Expr* sema_cond_;
 };
 
 class ReturnStatement : public Statement

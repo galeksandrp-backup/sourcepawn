@@ -91,6 +91,19 @@ class SemaPrinter : public ast::StrictAstVisitor
     unindent();
   }
 
+  void visitWhileStatement(ast::WhileStatement* stmt) override {
+    prefix();
+    fprintf(fp_, "- WhileStatement\n");
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "%s\n", TokenNames[stmt->token()]);
+      printExpr(stmt->sema_cond());
+      stmt->body()->accept(this);
+    }
+    unindent();
+  }
+
   void visitExpressionStatement(ast::ExpressionStatement* stmt) override {
     prefix();
     fprintf(fp_, "- ExpressionStatement\n");

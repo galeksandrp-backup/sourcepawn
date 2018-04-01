@@ -230,6 +230,12 @@ SemanticAnalysis::visitStatement(Statement* node)
     case AstKind::kVarDecl:
       visitVarDecl(node->toVarDecl());
       break;
+    case AstKind::kWhileStatement:
+      visitWhileStatement(node->toWhileStatement());
+      break;
+    case AstKind::kBlockStatement:
+      visitBlockStatement(node->toBlockStatement());
+      break;
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-stmt" << node->kindName();
@@ -283,6 +289,23 @@ SemanticAnalysis::visitVarDecl(VarDecl* node)
 
   if (sym->scope()->kind() == Scope::Global)
     global_vars_.append(node);
+}
+
+void
+SemanticAnalysis::visitWhileStatement(WhileStatement* node)
+{
+  // :TODO: implement unintended-assignment warning
+
+  // Even if we can't coerce the stop expression, we still type-check the body.
+  sema::Expr* cond = visitExpression(node->condition());
+  if (cond) {
+    Type* boolType = types_->getPrimitive(PrimitiveType::Bool);
+    if ((cond = coerce(cond, boolType, Coercion::Test)) != nullptr)
+      node->set_sema_cond(cond);
+  }
+
+  // :TODO: check for infinite loop, if no breaks.
+  visitStatement(node->body());
 }
 
 void

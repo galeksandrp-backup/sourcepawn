@@ -47,6 +47,7 @@ class SemanticAnalysis
   void visitReturnStatement(ReturnStatement* node);
   void visitExpressionStatement(ExpressionStatement* node);
   void visitVarDecl(VarDecl* node);
+  void visitWhileStatement(WhileStatement* node);
 
   sema::Expr* visitExpression(Expression* node);
   sema::ConstValueExpr* visitIntegerLiteral(IntegerLiteral* node);
@@ -68,7 +69,8 @@ class SemanticAnalysis
   enum class Coercion {
     Arg,
     Assignment,
-    Return
+    Return,
+    Test
   };
   sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
   sema::Expr* coerce_inner(sema::Expr* from_expr,

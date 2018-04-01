@@ -44,6 +44,7 @@ private:
   void generateBlock(ast::BlockStatement* block);
   void generateReturn(ast::ReturnStatement* stmt);
   void generateExprStatement(ast::ExpressionStatement* stmt);
+  void generateWhile(ast::WhileStatement* stmt);
 
   // Allocate space and generate data for a local variable.
   void generateVarDecl(ast::VarDecl* decl);
@@ -66,6 +67,16 @@ private:
   ValueDest emitVar(sema::VarExpr* expr, ValueDest dest);
   ValueDest emitTrivialCast(sema::TrivialCastExpr* expr, ValueDest dest);
   ValueDest emitString(sema::StringExpr* expr, ValueDest dest);
+
+private:
+  struct TestContext {
+    Label taken;
+    Label fallthrough;
+  };
+  void test(sema::Expr* expr, bool jumpOnTrue, TestContext& cx);
+
+  // Load two expressions into PRI and ALT.
+  bool load_both(sema::Expr* left, sema::Expr* right);
 
 private:
   // Signal that the given register is about to be clobbered.
