@@ -73,6 +73,10 @@ public:
   virtual ExprKind kind() const = 0;
   virtual const char* prettyName() const = 0;
 
+  virtual bool isConstant() const {
+    return false;
+  }
+
 #define _(name)                                 \
   virtual name##Expr* as##name##Expr() {        \
     return nullptr;                             \
@@ -117,6 +121,9 @@ public:
 
   const BoxedValue& value() const {
     return value_;
+  }
+  bool isConstant() const override {
+    return true;
   }
 
 private:

@@ -26,6 +26,7 @@ namespace sp {
 
 namespace ast {
 class FunctionStatement;
+class VarDecl;
 } // namespace ast
 
 namespace sema {
@@ -34,8 +35,8 @@ class FunctionDef;
 
 struct Program : public PoolObject
 {
-  ke::Vector<ast::FunctionStatement*> natives;
   ke::Vector<ast::FunctionStatement*> functions;
+  ke::Vector<ast::VarDecl*> globals;
 
   void dump(FILE* fp);
 };

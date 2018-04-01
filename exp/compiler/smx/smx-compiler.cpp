@@ -56,6 +56,13 @@ SmxCompiler::compile()
   // This is always the first opcode, so instruction 0 is invalid.
   __ opcode(OP_HALT);
 
+  for (ast::VarDecl* decl : program_->globals) {
+    if (!cc_.canContinueProcessing())
+      return false;
+
+    generateData(decl);
+  }
+
   for (ast::FunctionStatement* fun : program_->functions) {
     if (!cc_.canContinueProcessing())
       return false;
@@ -88,7 +95,7 @@ SmxCompiler::compile()
   builder_.add(code);
 
   // Ensure the data section has at least one value.
-  // :TODO: clean up data handling
+  // :TODO: clean up data handling, check <= INT_MAX, not overflowed
   if (!data_.size())
     data_.write(0);
 
@@ -141,6 +148,8 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
 
   __ bind(fun->address());
   __ opcode(OP_PROC);
+
+  // :TODO: don't generate if no local vars
   __ opcode(OP_STACK, &entry_stack_op_);
 
   generateBlock(fun->body());
@@ -353,6 +362,8 @@ SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
 {
   VariableSymbol* sym = expr->sym();
 
+  assert(sym->type()->isPrimitive());
+
   switch (sym->storage()) {
     case StorageClass::Argument:
     case StorageClass::Local:
@@ -363,6 +374,18 @@ SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
         __ opcode(OP_LOAD_S_ALT, sym->address());
       else if (dest == ValueDest::Stack)
         __ opcode(OP_PUSH_S, sym->address());
+      else
+        assert(false);
+      return dest;
+
+    case StorageClass::Global:
+      will_kill(dest);
+      if (dest == ValueDest::Pri)
+        __ opcode(OP_LOAD_PRI, sym->address());
+      else if (dest == ValueDest::Alt)
+        __ opcode(OP_LOAD_ALT, sym->address());
+      else if (dest == ValueDest::Stack)
+        __ opcode(OP_PUSH, sym->address());
       else
         assert(false);
       return dest;
@@ -655,6 +678,38 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
   }
 
   return ValueDest::Pri;
+}
+
+void
+SmxCompiler::generateData(ast::VarDecl* decl)
+{
+  VariableSymbol* sym = decl->sym();
+  assert(HasSimpleCellStorage(sym->type()));
+
+  int32_t address = int32_t(data_.pos());
+  sym->allocate(StorageClass::Global, address);
+
+  data_.write<cell_t>(0);
+
+  sema::Expr* init = decl->sema_init();
+  if (!init)
+    return;
+
+  uint8_t* bytes = data_.bytes() + sym->address();
+  switch (init->kind()) {
+    case sema::ExprKind::ConstValue:
+    {
+      sema::ConstValueExpr* expr = init->toConstValueExpr();
+      const BoxedValue& value = expr->value();
+      if (value.isInteger()) {
+        *reinterpret_cast<int32_t*>(bytes) = (int32_t)value.toInteger().asSigned();
+      } else {
+        cc_.report(decl->loc(), rmsg::unimpl_kind) <<
+          "smx-gen-data" << "value type";
+      }
+      break;
+    }
+  }
 }
 
 void

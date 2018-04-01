@@ -44,7 +44,12 @@ private:
   void generateBlock(ast::BlockStatement* block);
   void generateReturn(ast::ReturnStatement* stmt);
   void generateExprStatement(ast::ExpressionStatement* stmt);
-  void generateVarDecl(ast::VarDecl* stmt);
+
+  // Allocate space and generate data for a local variable.
+  void generateVarDecl(ast::VarDecl* decl);
+
+  // Allocate space and generate data for a global variable.
+  void generateData(ast::VarDecl* stmt);
 
   // Emit an expression into the given destination, returning false on failure.
   bool emit_into(sema::Expr* expr, ValueDest dest);

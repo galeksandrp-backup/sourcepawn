@@ -2096,6 +2096,8 @@ Parser::global(TokenKind kind)
     return nullptr;
 
   if (kind == TOK_NEW || decl.spec.hasPostDims() || !peek(TOK_LPAREN)) {
+    // NYI.
+    assert(!(attrs & DeclAttrs::Public));
     if (kind == TOK_NEW && decl.spec.isNewDecl())
       cc_.report(scanner_.begin(), rmsg::newdecl_with_new);
     return variable(TOK_NEW, &decl, attrs);

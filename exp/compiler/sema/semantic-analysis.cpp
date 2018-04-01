@@ -44,7 +44,7 @@ SemanticAnalysis::analyze()
 
   sema::Program* program = new (pool_) sema::Program;
   program->functions = ke::Move(global_functions_);
-  program->natives = ke::Move(global_natives_);
+  program->globals = ke::Move(global_vars_);
   return program;
 }
 
@@ -60,6 +60,12 @@ SemanticAnalysis::walkAST()
       {
         FunctionStatement* fun = stmt->toFunctionStatement();
         visitFunctionStatement(fun);
+        break;
+      }
+      case AstKind::kVarDecl:
+      {
+        VarDecl* decl = stmt->toVarDecl();
+        visitVarDecl(decl);
         break;
       }
       default:
@@ -85,11 +91,8 @@ SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
     analyzeShadowedFunctions(sym);
   }
 
-  if (!node->body()) {
-    if (node->signature()->native())
-      global_natives_.append(node);
+  if (!node->body())
     return;
-  }
 
   FuncState state(&fs_, node);
   visitBlockStatement(node->body());
@@ -263,8 +266,17 @@ SemanticAnalysis::visitVarDecl(VarDecl* node)
   if (node->initialization()) {
     if ((init = initializer(node->initialization(), sym->type())) == nullptr)
       return;
+
+    if (sym->scope()->kind() == Scope::Global && !init->isConstant()) {
+      cc_.report(node->loc(), rmsg::global_non_const_init) << sym->name();
+      return;
+    }
+
     node->set_sema_init(init);
   }
+
+  if (sym->scope()->kind() == Scope::Global)
+    global_vars_.append(node);
 }
 
 void
@@ -439,6 +451,7 @@ SemanticAnalysis::initializer(ast::Expression* node, Type* type)
   if (!expr)
     return nullptr;
 
+  // :TODO: check overflow integers
   return coerce(expr, type, Coercion::Assignment);
 }
 

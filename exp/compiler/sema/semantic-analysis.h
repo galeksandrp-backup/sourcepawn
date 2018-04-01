@@ -107,7 +107,7 @@ class SemanticAnalysis
   FuncState *fs_;
 
   ke::Vector<ast::FunctionStatement*> global_functions_;
-  ke::Vector<ast::FunctionStatement*> global_natives_;
+  ke::Vector<ast::VarDecl*> global_vars_;
 };
 
 } // namespace sp
