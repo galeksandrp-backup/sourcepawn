@@ -344,14 +344,23 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement* node)
 
   fs_->return_status = ReturnStatus::All;
 
+  // :TODO: unreachable code warning
+
   if (returnType->isVoid()) {
     if (node->expr())
       cc_.report(node->loc(), rmsg::returned_in_void_function);
     return;
   }
 
-  if (!node->expr())
+  if (!node->expr()) {
+    // This is okay for simple types.
+    if (returnType->isPrimitive() || returnType->isEnum())
+      return;
+
+    // Not okay for more advanced types.
     cc_.report(node->loc(), rmsg::need_return_value);
+    return;
+  }
 
   sema::Expr* expr = visitExpression(node->expr());
 

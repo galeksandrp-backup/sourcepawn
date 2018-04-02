@@ -138,6 +138,11 @@ class DataLabel
     status_ |= kBound;
   }
 
+  void reset() {
+    assert(!used() || bound());
+    status_ = 0;
+  }
+
  private:
   uint32_t status_;
 };

@@ -148,6 +148,7 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
   // :TODO: move this into local state, otherwise nested functions will be hard.
   max_var_stk_ = 0;
   cur_var_stk_ = 0;
+  entry_stack_op_.reset();
 
   __ bind(fun->address());
   __ opcode(OP_PROC);
@@ -165,12 +166,27 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
   }
   __ opcode(OP_ENDPROC);
 
+  Atom* name = fun->name();
   if (!(fun->attrs() & ast::DeclAttrs::Public)) {
-    cc_.report(fun->loc(), rmsg::non_public_not_supported);
-    return;
+    // We add all functions to the publics table as a great compatibility hack:
+    // it makes the functions invisible (and hard to reliably predict) to other
+    // plugins, as well as the VM, but lets us use the ancient FunctionId scheme
+    // for passing functions-as-values.
+    //
+    // This decoration is totally random, it could be anything, as long as it's
+    // likely to change across compilations.
+    //
+    // Note: We really need a better string library.
+    char decorated_prefix[24];
+    ke::SafeSprintf(decorated_prefix, sizeof(decorated_prefix), ".%d.", fun->address()->offset());
+
+    size_t length = strlen(decorated_prefix) + name->length() + 1;
+    ke::UniquePtr<char[]> decorated(new char[length]);
+    ke::SafeSprintf(decorated.get(), length, "%s%s", decorated_prefix, name->chars());
+    name = cc_.add(decorated.get(), length);
   }
 
-  publics_.append(FunctionEntry(fun->name(), fun));
+  publics_.append(FunctionEntry(name, fun));
 }
 
 void
@@ -284,7 +300,12 @@ SmxCompiler::generateExprStatement(ast::ExpressionStatement* stmt)
 void
 SmxCompiler::generateReturn(ast::ReturnStatement* stmt)
 {
-  emit_into(stmt->sema_expr(), ValueDest::Pri);
+  // Note: functions with void return return 0 for compatibility reasons. We
+  // could probably do away with this for non-publics with a void return.
+  if (sema::Expr* expr = stmt->sema_expr())
+    emit_into(expr, ValueDest::Pri);
+  else
+    __ opcode(OP_CONST_PRI, 0);
   __ opcode(OP_RETN);
 }
 

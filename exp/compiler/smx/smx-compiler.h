@@ -155,7 +155,6 @@ private:
   int32_t max_var_stk_;
   int32_t cur_var_stk_;
   DataLabel entry_stack_op_;
-  Label common_return_;
 
   // Current loop context. If we do nested functions, these have to be zapped
   // at function boundaries.
