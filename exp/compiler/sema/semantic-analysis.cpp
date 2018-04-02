@@ -517,8 +517,15 @@ SemanticAnalysis::visitUnaryExpression(ast::UnaryExpression* node)
   if (!expr)
     return nullptr;
 
-  Type* type = expr->type();
-  assert(type->primitive() == PrimitiveType::Int32);
+  Type* type;
+  if (node->token() == TOK_NOT) {
+    type = types_->getPrimitive(PrimitiveType::Bool);
+    if (!(expr = coerce(expr, type, Coercion::Expr)))
+      return nullptr;
+  } else {
+    type = expr->type();
+    assert(type->primitive() == PrimitiveType::Int32);
+  }
 
   return new (pool_) sema::UnaryExpr(node, type, node->token(), expr);
 }

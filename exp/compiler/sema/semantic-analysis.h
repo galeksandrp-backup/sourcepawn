@@ -72,7 +72,8 @@ class SemanticAnalysis
     Arg,
     Assignment,
     Return,
-    Test
+    Test,
+    Expr
   };
   sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
   sema::Expr* coerce_inner(sema::Expr* from_expr,

@@ -891,6 +891,14 @@ SmxCompiler::test(sema::Expr* expr, bool jumpOnTrue, Label* taken, Label* fallth
     }
   }
 
+  if (sema::UnaryExpr* unary = expr->asUnaryExpr()) {
+    if (unary->token() == TOK_NOT) {
+      // Note: we re-enter test so we can peel away more operations underneath the !
+      test(unary->expr(), !jumpOnTrue, taken, fallthrough);
+      return;
+    }
+  }
+
   if (!emit_into(expr, ValueDest::Pri))
     return;
 
