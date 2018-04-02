@@ -213,6 +213,9 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
     case ast::AstKind::kWhileStatement:
       generateWhile(stmt->toWhileStatement());
       break;
+    case ast::AstKind::kForStatement:
+      generateFor(stmt->toForStatement());
+      break;
     case ast::AstKind::kIfStatement:
       generateIf(stmt->toIfStatement());
       break;
@@ -344,6 +347,42 @@ SmxCompiler::generateWhile(ast::WhileStatement* stmt)
     test(cond, true, &taken, &fallthrough);
     __ bind(&fallthrough);
   }
+}
+
+void
+SmxCompiler::generateFor(ast::ForStatement* stmt)
+{
+  if (ast::Statement* init = stmt->initialization())
+    generateStatement(init);
+
+  Label cond, body, done, update;
+
+  // cond:
+  //  test expr
+  //  jfalse done
+  // body:
+  //  <body>
+  // update:
+  //  <update>
+  //  jmp <cond>
+  // done:
+
+  __ bind(&cond);
+  if (sema::Expr* cond_expr = stmt->sema_cond())
+    test(cond_expr, false, &done, &body);
+  __ bind(&body);
+  {
+    ke::SaveAndSet<Label*> save_break(&break_to_, &done);
+    ke::SaveAndSet<Label*> save_continue(&continue_to_, &update);
+
+    ast::Statement* body = stmt->body();
+    generateStatement(body);
+  }
+  __ bind(&update);
+  if (ast::Statement* update_stmt = stmt->update())
+    generateStatement(update_stmt);
+  __ opcode(OP_JUMP, &cond);
+  __ bind(&done);
 }
 
 void

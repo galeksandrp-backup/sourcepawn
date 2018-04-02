@@ -234,6 +234,9 @@ SemanticAnalysis::visitStatement(Statement* node)
     case AstKind::kWhileStatement:
       visitWhileStatement(node->toWhileStatement());
       break;
+    case AstKind::kForStatement:
+      visitForStatement(node->toForStatement());
+      break;
     case AstKind::kBlockStatement:
       visitBlockStatement(node->toBlockStatement());
       break;
@@ -308,13 +311,38 @@ SemanticAnalysis::visitWhileStatement(WhileStatement* node)
   // Even if we can't coerce the stop expression, we still type-check the body.
   sema::Expr* cond = visitExpression(node->condition());
   if (cond) {
-    Type* boolType = types_->getPrimitive(PrimitiveType::Bool);
+    Type* boolType = types_->getBool();
     if ((cond = coerce(cond, boolType, Coercion::Test)) != nullptr)
       node->set_sema_cond(cond);
   }
 
   // :TODO: check for infinite loop, if no breaks.
   visitStatement(node->body());
+}
+
+void
+SemanticAnalysis::visitForStatement(ForStatement* node)
+{
+  // :TODO: infinite loop check? see if sp1 does
+
+  if (Statement* init = node->initialization())
+    visitStatement(init);
+  if (Expression* cond = node->condition()) {
+    if (sema::Expr* expr = visitExpression(cond)) {
+      Type* boolType = types_->getBool();
+      if ((expr = coerce(expr, boolType, Coercion::Test)) != nullptr)
+        node->set_sema_cond(expr);
+    }
+  }
+
+  // Break/continue are only valid inside the body.
+  {
+    ke::SaveAndSet<size_t> enter_loop(&loop_depth_, loop_depth_ + 1);
+    visitStatement(node->body());
+  }
+
+  if (Statement* update = node->update())
+    visitStatement(update);
 }
 
 void
@@ -325,7 +353,7 @@ SemanticAnalysis::visitIfStatement(IfStatement* node)
 
     clause.sema_cond = visitExpression(clause.cond);
     if (clause.sema_cond) {
-      Type* boolType = types_->getPrimitive(PrimitiveType::Bool);
+      Type* boolType = types_->getBool();
       clause.sema_cond = coerce(clause.sema_cond, boolType, Coercion::Test);
     }
 
@@ -476,7 +504,7 @@ SemanticAnalysis::visitBinaryExpression(BinaryExpression* node)
 
   // Logical operators need booleans on both sides.
   if (node->token() == TOK_OR || node->token() == TOK_AND) {
-    Type* boolType = types_->getPrimitive(PrimitiveType::Bool);
+    Type* boolType = types_->getBool();
     if (!(left = coerce(left, boolType, Coercion::Test)))
       return nullptr;
     if (!(right = coerce(right, boolType, Coercion::Test)))
@@ -508,7 +536,7 @@ SemanticAnalysis::visitBinaryExpression(BinaryExpression* node)
     case TOK_LE:
     case TOK_OR:
     case TOK_AND:
-      type = types_->getPrimitive(PrimitiveType::Bool);
+      type = types_->getBool();
       break;
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
@@ -528,7 +556,7 @@ SemanticAnalysis::visitUnaryExpression(ast::UnaryExpression* node)
 
   Type* type;
   if (node->token() == TOK_NOT) {
-    type = types_->getPrimitive(PrimitiveType::Bool);
+    type = types_->getBool();
     if (!(expr = coerce(expr, type, Coercion::Expr)))
       return nullptr;
   } else {

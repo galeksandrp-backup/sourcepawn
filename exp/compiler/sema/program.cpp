@@ -67,12 +67,8 @@ class SemaPrinter : public ast::StrictAstVisitor
      fprintf(fp_, "- VarDecl: %s\n", BuildTypeName(stmt->sym()->type(), stmt->sym()->name()).chars());
      indent();
      {
-       prefix();
-       fprintf(fp_, "=\n");
-       if (sema::Expr* expr = stmt->sema_init()) {
-         prefix();
+       if (sema::Expr* expr = stmt->sema_init())
          printExpr(expr);
-       }
      }
      unindent();
   }
@@ -99,6 +95,34 @@ class SemaPrinter : public ast::StrictAstVisitor
       prefix();
       fprintf(fp_, "%s\n", TokenNames[stmt->token()]);
       printExpr(stmt->sema_cond());
+      stmt->body()->accept(this);
+    }
+    unindent();
+  }
+
+  void visitForStatement(ast::ForStatement* stmt) override {
+    prefix();
+    fprintf(fp_, "- ForStatement\n");
+    indent();
+    {
+      if (ast::Statement* init = stmt->initialization()) {
+        init->accept(this);
+      } else {
+        prefix();
+        fprintf(fp_, "(no init)\n");
+      }
+      if (sema::Expr* expr = stmt->sema_cond()) {
+        printExpr(expr);
+      } else {
+        prefix();
+        fprintf(fp_, "(no cond)\n");
+      }
+      if (ast::Statement* update = stmt->update()) {
+        update->accept(this);
+      } else {
+        prefix();
+        fprintf(fp_, "(no update)\n");
+      }
       stmt->body()->accept(this);
     }
     unindent();

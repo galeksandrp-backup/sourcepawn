@@ -819,7 +819,8 @@ class ForStatement : public Statement
       condition_(condition),
       update_(update),
       body_(body),
-      scope_(scope)
+      scope_(scope),
+      sema_cond_(nullptr)
   {
   }
 
@@ -844,6 +845,16 @@ class ForStatement : public Statement
     assert(!scope_);
     scope_ = scope;
   }
+
+  sema::Expr* sema_cond() const {
+    return sema_cond_;
+  }
+  void set_sema_cond(sema::Expr* expr) {
+    sema_cond_ = expr;
+  }
+
+ private:
+  sema::Expr* sema_cond_;
 };
 
 // FoldedExprs note that an expression has been constant-folded during semantic

@@ -41,6 +41,9 @@ class TypeManager
   Type *getPrimitive(PrimitiveType type) const {
     return primitiveTypes_[size_t(type)];
   }
+  Type *getBool() const {
+      return getPrimitive(PrimitiveType::Bool);
+  }
   Type *getVoid() const {
     return voidType_;
   }

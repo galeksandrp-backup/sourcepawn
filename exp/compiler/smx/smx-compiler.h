@@ -45,6 +45,7 @@ private:
   void generateReturn(ast::ReturnStatement* stmt);
   void generateExprStatement(ast::ExpressionStatement* stmt);
   void generateWhile(ast::WhileStatement* stmt);
+  void generateFor(ast::ForStatement* stmt);
   void generateIf(ast::IfStatement* stmt);
   void generateBreak(ast::BreakStatement* stmt);
 

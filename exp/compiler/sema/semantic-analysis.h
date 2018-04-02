@@ -48,6 +48,7 @@ class SemanticAnalysis
   void visitExpressionStatement(ExpressionStatement* node);
   void visitVarDecl(VarDecl* node);
   void visitWhileStatement(WhileStatement* node);
+  void visitForStatement(ForStatement* node);
   void visitIfStatement(IfStatement* node);
   void visitBreakStatement(BreakStatement* node);
 
