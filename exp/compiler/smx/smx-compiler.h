@@ -70,6 +70,7 @@ private:
   ValueDest emitVar(sema::VarExpr* expr, ValueDest dest);
   ValueDest emitTrivialCast(sema::TrivialCastExpr* expr, ValueDest dest);
   ValueDest emitString(sema::StringExpr* expr, ValueDest dest);
+  ValueDest emitIncDec(sema::IncDecExpr* expr, ValueDest dest);
 
 private:
   void test(sema::Expr* expr, bool jumpOnTrue, Label* taken, Label* fallthrough);
@@ -81,10 +82,10 @@ private:
   // Load two expressions into PRI and ALT.
   bool load_both(sema::Expr* left, sema::Expr* right);
 
-private:
   // Store a constant value. Calls will_kill().
   void emit_const(ValueDest dest, cell_t value);
 
+private:
   // Signal that the given register is about to be clobbered.
   void will_kill(ValueDest dest);
 

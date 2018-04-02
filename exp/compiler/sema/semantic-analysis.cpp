@@ -269,6 +269,8 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitUnaryExpression(node->toUnaryExpression());
     case AstKind::kStringLiteral:
       return visitStringLiteral(node->toStringLiteral());
+    case AstKind::kIncDecExpression:
+      return visitIncDec(node->toIncDecExpression());
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-expr" << node->kindName();
@@ -414,6 +416,9 @@ SemanticAnalysis::visitExpressionStatement(ExpressionStatement* node)
   if (!expr)
     return;
   node->set_sema_expr(expr);
+
+  // :TODO: side-effects
+  // :TODO: eliminate load-after-stores, for example, i++.
 }
 
 sema::CallExpr*
@@ -575,6 +580,41 @@ SemanticAnalysis::visitStringLiteral(ast::StringLiteral* node)
   Type* strLitType = types_->newQualified(strType, Qualifiers::Const);
 
   return new (pool_) sema::StringExpr(node, strLitType, node->literal());
+}
+
+sema::Expr*
+SemanticAnalysis::visitIncDec(ast::IncDecExpression* node)
+{
+  sema::Expr* expr = visitLValue(node->expression());
+  if (!expr)
+    return nullptr;
+
+  return new (pool_) sema::IncDecExpr(node, expr->type(), node->token(), expr, node->postfix());
+}
+
+sema::Expr*
+SemanticAnalysis::visitLValue(ast::Expression* node)
+{
+  sema::Expr* expr = visitExpression(node);
+  if (!expr)
+    return nullptr;
+
+  switch (expr->kind()) {
+    case sema::ExprKind::Var:
+    {
+      // :TODO: test assign-to-const
+      // :TODO: test constval-implies-readonly
+      sema::VarExpr* var = expr->toVarExpr();
+      if (var->sym()->storage_flags() & StorageFlags::readonly)
+        cc_.report(node->loc(), rmsg::lvalue_is_const);
+      break;
+    }
+    default:
+      cc_.report(node->loc(), rmsg::illegal_lvalue);
+      return nullptr;
+  }
+
+  return expr;
 }
 
 sema::Expr*

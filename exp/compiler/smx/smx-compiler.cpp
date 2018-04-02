@@ -465,6 +465,8 @@ SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
     return emitTrivialCast(expr->toTrivialCastExpr(), dest);
   case sema::ExprKind::String:
     return emitString(expr->toStringExpr(), dest);
+  case sema::ExprKind::IncDec:
+    return emitIncDec(expr->toIncDecExpr(), dest);
   default:
     cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
       "smx-emit-expr" << expr->prettyName();
@@ -886,6 +888,64 @@ SmxCompiler::emitString(sema::StringExpr* expr, ValueDest dest)
   // Finally we can push the value.
   emit_const(dest, address);
   return dest;
+}
+
+#if 0
+// Return alt if reg is pri, otherwise return pri. This works even for Stack,
+// since usually we just want a register to spill.
+static inline ValueDest
+pick_other(ValueDest reg)
+{
+  if (reg == ValueDest::Pri)
+    return ValueDest::Alt;
+  return ValueDest::Pri;
+}
+#endif
+
+ValueDest
+SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
+{
+  sema::Expr* lvalue = expr->expr();
+
+  will_kill(dest);
+
+  switch (lvalue->kind()) {
+    case sema::ExprKind::Var:
+    {
+      sema::VarExpr* var = lvalue->toVarExpr();
+      VariableSymbol* sym = var->sym();
+      assert(!sym->type()->isReference());
+
+      if (expr->prefix())
+        emitVar(var, dest);
+
+      switch (sym->storage()) {
+        case StorageClass::Argument:
+        case StorageClass::Local:
+          if (expr->token() == TOK_INCREMENT)
+            __ opcode(OP_INC_S, sym->address());
+          else
+            __ opcode(OP_DEC_S, sym->address());
+          break;
+        case StorageClass::Global:
+          if (expr->token() == TOK_INCREMENT)
+            __ opcode(OP_INC, sym->address());
+          else
+            __ opcode(OP_DEC, sym->address());
+          break;
+        default:
+          assert(false);
+      }
+
+      if (expr->postfix())
+        emitVar(var, dest);
+      return dest;
+    }
+    default:
+      cc_.report(lvalue->src()->loc(), rmsg::unimpl_kind) <<
+        "smx-emit-incdec" << lvalue->prettyName();
+      return ValueDest::Error;
+  }
 }
 
 static inline OPCODE

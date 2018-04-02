@@ -178,6 +178,9 @@ class SemaPrinter : public ast::StrictAstVisitor
       case sema::ExprKind::Var:
         printVar(expr->toVarExpr());
         break;
+      case sema::ExprKind::IncDec:
+        printIncDec(expr->toIncDecExpr());
+        break;
       case sema::ExprKind::TrivialCast:
         printTrivialCast(expr->toTrivialCastExpr());
         break;
@@ -284,6 +287,19 @@ class SemaPrinter : public ast::StrictAstVisitor
       expr->prettyName(),
       expr->sym()->name()->chars(),
       str.chars());
+  }
+
+  void printIncDec(sema::IncDecExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "%s (%s)\n",
+        TokenNames[expr->token()],
+        (expr->postfix() ? "postfix" : "prefix"));
+      printExpr(expr->expr());
+    }
+    unindent();
   }
 
   void dump(const BoxedValue& value) {

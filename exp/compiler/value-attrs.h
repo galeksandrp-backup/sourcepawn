@@ -19,6 +19,7 @@
 #define _include_spcomp_expression_ops_h_
 
 #include <amtl/am-enum.h>
+#include <amtl/am-flags.h>
 #include "boxed-value.h"
 
 namespace sp {

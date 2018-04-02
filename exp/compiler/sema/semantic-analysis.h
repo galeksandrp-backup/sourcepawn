@@ -59,12 +59,16 @@ class SemanticAnalysis
   sema::Expr* visitNameProxy(ast::NameProxy* node);
   sema::Expr* visitUnaryExpression(ast::UnaryExpression* node);
   sema::Expr* visitStringLiteral(ast::StringLiteral* node);
+  sema::Expr* visitIncDec(ast::IncDecExpression* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);
   void checkForwardedFunction(FunctionStatement *forward, FunctionStatement *impl); 
   bool matchForwardSignatures(FunctionSignature *fwdSig, FunctionSignature *implSig);
   bool matchForwardReturnTypes(Type *fwdRetType, Type *implRetType);
+
+  // Same as visitExpression, but only returns l-values.
+  sema::Expr* visitLValue(Expression* node);
 
   sema::Expr* check_arg(sema::Expr* arg, VarDecl* param);
   sema::Expr* check_array_arg(sema::Expr* arg, VarDecl* param);

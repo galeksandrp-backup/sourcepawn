@@ -171,10 +171,10 @@ class VariableSymbol : public Symbol
     return !isConstExpr() && !failedToResolveConstExpr();
   }
 
-  StorageFlags& storage_flags() {
+  ke::Flags<StorageFlags>& storage_flags() {
     return storage_flags_;
   }
-  const StorageFlags storage_flags() const {
+  const ke::Flags<StorageFlags> storage_flags() const {
     return storage_flags_;
   }
   bool isByRef() const {
@@ -206,7 +206,7 @@ class VariableSymbol : public Symbol
 
  private:
   StorageClass storage_;
-  StorageFlags storage_flags_;
+  ke::Flags<StorageFlags> storage_flags_;
   int32_t address_;
   Type *type_;
   BoxedValue constant_;

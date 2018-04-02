@@ -42,6 +42,7 @@ namespace sema {
   _(Var)                  \
   _(TrivialCast)          \
   _(String)               \
+  _(IncDec)               \
   /* terminator */
 
 // Forward declarations.
@@ -187,6 +188,41 @@ class UnaryExpr final : public Expr
  private:
   TokenKind token_;
   Expr* expr_;
+};
+
+class IncDecExpr final : public Expr
+{
+ public:
+  explicit IncDecExpr(ast::Expression* node,
+                     Type* type,
+                     TokenKind tok,
+                     Expr* expr,
+                     bool postfix)
+   : Expr(node, type),
+     token_(tok),
+     expr_(expr),
+     postfix_(postfix)
+  {}
+
+  DECLARE_SEMA(IncDec)
+
+  TokenKind token() const {
+    return token_;
+  }
+  Expr* expr() const {
+    return expr_;
+  }
+  bool prefix() const {
+    return !postfix_;
+  }
+  bool postfix() const {
+    return postfix_;
+  }
+
+ private:
+  TokenKind token_;
+  Expr* expr_;
+  bool postfix_;
 };
 
 class TrivialCastExpr final : public Expr

@@ -52,7 +52,6 @@ RMSG(unexpected_directive_token,    syntax,            "unexpected token '%0' in
 
 // Parser errors.
 RMSG(expected_expression,           syntax,            "expected expression, got '%0'")
-RMSG(expected_lvalue,               syntax,            "illegal assignment, expected an l-value")
 RMSG(expected_global_decl,          syntax,            "expected global declaration, got '%0'")
 RMSG(expected_semicolon,            syntax,            "expected a semicolon in semicolons-required mode")
 RMSG(expected_newline_or_semicolon, syntax,            "expected newline or semicolon")
@@ -146,6 +145,8 @@ RMSG(typeset_must_only_have_fun,    type,              "typesets should only con
 RMSG(callee_is_not_function,        type,              "callee must be a named global function")
 RMSG(cannot_coerce,                 type,              "cannot coerce type '%0' to '%1'")
 RMSG(global_non_const_init,         type,              "global variable '%0' has non-constant initializer")
+RMSG(illegal_lvalue,                type,              "expression must be an l-value")
+RMSG(lvalue_is_const,               type,              "l-value cannot be modified")
 
 RMSG(too_much_stack,                impl,              "function uses too much stack space")
 
