@@ -48,6 +48,8 @@ class SemanticAnalysis
   void visitExpressionStatement(ExpressionStatement* node);
   void visitVarDecl(VarDecl* node);
   void visitWhileStatement(WhileStatement* node);
+  void visitIfStatement(IfStatement* node);
+  void visitBreakStatement(BreakStatement* node);
 
   sema::Expr* visitExpression(Expression* node);
   sema::ConstValueExpr* visitIntegerLiteral(IntegerLiteral* node);
@@ -115,6 +117,8 @@ class SemanticAnalysis
 
   ke::Vector<ast::FunctionStatement*> global_functions_;
   ke::Vector<ast::VarDecl*> global_vars_;
+
+  size_t loop_depth_;
 };
 
 } // namespace sp

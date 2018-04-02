@@ -44,7 +44,10 @@ SmxCompiler::SmxCompiler(CompileContext& cc, sema::Program* program)
    pri_value_(0),
    alt_value_(0),
    max_var_stk_(0),
-   cur_var_stk_(0)
+   cur_var_stk_(0),
+   continue_to_(nullptr),
+   break_to_(nullptr),
+   last_stmt_pc_(0)
 {
   names_ = new SmxNameTable(".names");
   builder_.add(names_);
@@ -173,6 +176,13 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
 void
 SmxCompiler::generateStatement(ast::Statement* stmt)
 {
+  // We don't really have line information here, so we emit BREAKs at
+  // statements instead.
+  if (last_stmt_pc_ != masm_.pc()) {
+    __ opcode(OP_BREAK);
+    last_stmt_pc_ = masm_.pc();
+  }
+
   // :TODO: track stack depth
   switch (stmt->kind()) {
     case ast::AstKind::kReturnStatement:
@@ -187,8 +197,14 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
     case ast::AstKind::kWhileStatement:
       generateWhile(stmt->toWhileStatement());
       break;
+    case ast::AstKind::kIfStatement:
+      generateIf(stmt->toIfStatement());
+      break;
     case ast::AstKind::kBlockStatement:
       generateBlock(stmt->toBlockStatement());
+      break;
+    case ast::AstKind::kBreakStatement:
+      generateBreak(stmt->toBreakStatement());
       break;
     default:
       cc_.report(stmt->loc(), rmsg::unimpl_kind) <<
@@ -277,29 +293,65 @@ SmxCompiler::generateWhile(ast::WhileStatement* stmt)
 {
   sema::Expr* cond = stmt->sema_cond();
 
-  TestContext cx;
+  Label taken, fallthrough;
   if (stmt->token() == TOK_WHILE) {
+    ke::SaveAndSet<Label*> save_break(&break_to_, &taken);
+    ke::SaveAndSet<Label*> save_continue(&continue_to_, &fallthrough);
+
     // if !<cond> goto done
     // repeat:
     //   <body>
     //   jump repeat
     // done:
-    test(cond, false, cx);
-    __ bind(&cx.fallthrough);
+    test(cond, false, &taken, &fallthrough);
+    __ bind(&fallthrough);
     generateStatement(stmt->body());
-    __ opcode(OP_JUMP, &cx.fallthrough);
-    __ bind(&cx.taken);
+    __ opcode(OP_JUMP, &fallthrough);
+    __ bind(&taken);
   } else {
+    ke::SaveAndSet<Label*> save_break(&break_to_, &taken);
+    ke::SaveAndSet<Label*> save_continue(&continue_to_, &fallthrough);
+
     // repeat:
+    //
     //   <body>
     //   if <cond> goto repeat
     // done:
     assert(stmt->token() == TOK_DO);
-    __ bind(&cx.taken);
+    __ bind(&taken);
     generateStatement(stmt->body());
-    test(cond, true, cx);
-    __ bind(&cx.fallthrough);
+    test(cond, true, &taken, &fallthrough);
+    __ bind(&fallthrough);
   }
+}
+
+void
+SmxCompiler::generateIf(ast::IfStatement* stmt)
+{
+  Label taken, fallthrough;
+
+  for (size_t i = 0; i < stmt->clauses()->length(); i++) {
+    const ast::IfClause& clause = stmt->clauses()->at(i);
+
+    // The previous false jump goes to the next condition.
+    __ bind(&taken);
+    taken.reset();
+
+    test(clause.sema_cond, false, &taken, &fallthrough);
+    __ bind(&fallthrough);
+    generateStatement(clause.body);
+    fallthrough.reset();
+  }
+
+  __ bind(&taken);
+  if (ast::Statement* final_else = stmt->fallthrough())
+    generateStatement(final_else);
+}
+
+void
+SmxCompiler::generateBreak(ast::BreakStatement* stmt)
+{
+  __ opcode(OP_JUMP, break_to_);
 }
 
 bool
@@ -378,22 +430,7 @@ SmxCompiler::emitConstValue(sema::ConstValueExpr* expr, ValueDest dest)
     assert(false);
   }
 
-  will_kill(dest);
-
-  switch (dest) {
-  case ValueDest::Pri:
-    __ opcode(OP_CONST_PRI, value);
-    break;
-  case ValueDest::Alt:
-    __ opcode(OP_CONST_ALT, value);
-    break;
-  case ValueDest::Stack:
-    __ opcode(OP_PUSH_C, value);
-    break;
-  default:
-    assert(false);
-  }
-
+  emit_const(dest, value);
   return dest;
 }
 
@@ -590,6 +627,30 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
       return ValueDest::Pri;
     }
 
+    case TOK_AND:
+    case TOK_OR:
+    {
+      Label done, taken, fallthrough;
+
+      // Make sure we've killed pri/alt on all branches. This may result in
+      // unnecessary spills! We don't really have any way to avoid that
+      // without pre-analyzing |expr|.
+      will_kill(ValueDest::Pri);
+      will_kill(ValueDest::Alt);
+
+      // Note: test implements special optimizations for || and && and we
+      // re-use them here. If test did not do this, it would infinitely
+      // recurse below. If those optimizations go away, we would need to
+      // test left/right independently here.
+      test(expr, true, &taken, &fallthrough);
+      __ bind(&fallthrough);
+      emit_const(dest, 0);
+      __ opcode(OP_JUMP, &done);
+      emit_const(dest, 1);
+      __ bind(&done);
+      return dest;
+    }
+
     default:
       cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
         "smx-binexpr-tok" << TokenNames[expr->token()];
@@ -762,19 +823,8 @@ SmxCompiler::emitString(sema::StringExpr* expr, ValueDest dest)
     data_.write<uint8_t>(0);
   assert(ke::IsAligned(data_.size(), sizeof(cell_t)));
 
-  // Finally we can push the value. 
-  will_kill(dest);
-  switch (dest) {
-    case ValueDest::Pri:
-      __ opcode(OP_CONST_PRI, address);
-      break;
-    case ValueDest::Alt:
-      __ opcode(OP_CONST_ALT, address);
-      break;
-    case ValueDest::Stack:
-      __ opcode(OP_PUSH_C, address);
-      break;
-  }
+  // Finally we can push the value.
+  emit_const(dest, address);
   return dest;
 }
 
@@ -786,6 +836,14 @@ BinaryOpHasInlineTest(TokenKind kind)
       return OP_JEQ;
     case TOK_NOTEQUALS:
       return OP_JNEQ;
+    case TOK_GT:
+      return OP_JSGRTR;
+    case TOK_GE:
+      return OP_JSGEQ;
+    case TOK_LT:
+      return OP_JSLESS;
+    case TOK_LE:
+      return OP_JSLEQ;
     default:
       return OP_NOP;
   }
@@ -799,6 +857,14 @@ InvertTestOp(OPCODE op)
       return OP_JNEQ;
     case OP_JNEQ:
       return OP_JEQ;
+    case OP_JSGRTR:
+      return OP_JSLEQ;
+    case OP_JSGEQ:
+      return OP_JSLESS;
+    case OP_JSLESS:
+      return OP_JSGEQ;
+    case OP_JSLEQ:
+      return OP_JSGRTR;
     default:
       assert(false);
       return OP_NOP;
@@ -806,16 +872,21 @@ InvertTestOp(OPCODE op)
 }
 
 void
-SmxCompiler::test(sema::Expr* expr, bool jumpOnTrue, TestContext& cx)
+SmxCompiler::test(sema::Expr* expr, bool jumpOnTrue, Label* taken, Label* fallthrough)
 {
   if (sema::BinaryExpr* bin = expr->asBinaryExpr()) {
     OPCODE op = BinaryOpHasInlineTest(bin->token());
     if (op != OP_NOP) {
       if (!jumpOnTrue)
         op = InvertTestOp(op);
-      
+
       load_both(bin->left(), bin->right());
-      __ opcode(op, &cx.taken);
+      __ opcode(op, taken);
+      return;
+    }
+
+    if (bin->token() == TOK_OR || bin->token() == TOK_AND) {
+      test_logical(bin, jumpOnTrue, taken, fallthrough);
       return;
     }
   }
@@ -824,9 +895,97 @@ SmxCompiler::test(sema::Expr* expr, bool jumpOnTrue, TestContext& cx)
     return;
 
   if (jumpOnTrue)
-    __ opcode(OP_JNZ, &cx.taken);
+    __ opcode(OP_JNZ, taken);
   else
-    __ opcode(OP_JZER, &cx.taken);
+    __ opcode(OP_JZER, taken);
+}
+
+void
+SmxCompiler::test_logical(sema::BinaryExpr* bin, bool jumpOnTrue, Label* taken, Label* fallthrough)
+{
+  TokenKind token = bin->token();
+  ke::Vector<sema::Expr*> sequence = flatten(bin);
+  assert(sequence.length() >= 2);
+
+  // a || b || c .... given jumpOnTrue, should be:
+  //
+  //   resolve a
+  //   jtrue TAKEN
+  //   resolve b
+  //   jtrue TAKEN
+  //   resolve c
+  //   jtrue TAKEN
+  //
+  // a || b || c .... given jumpOnFalse, should be:
+  //   resolve a
+  //   jtrue FALLTHROUGH
+  //   resolve b
+  //   jtrue FALLTHROUGH
+  //   resolve c
+  //   jfalse TAKEN
+  //  FALLTHROUGH:
+  //
+  // a && b && c ..... given jumpOnTrue, should be:
+  //   resolve a
+  //   jfalse FALLTHROUGH
+  //   resolve b
+  //   jfalse FALLTHROUGH
+  //   resolve c
+  //   jtrue TAKEN
+  //  FALLTHROUGH:
+  //
+  // a && b && c ..... given jumpOnFalse, should be:
+  //   resolve a
+  //   jfalse TAKEN
+  //   resolve b
+  //   jfalse TAKEN
+  //   resolve c
+  //   jfalse TAKEN
+  //
+  // This is fairly efficient, and by re-entering test() we can ensure each
+  // jfalse/jtrue encodes things like "a > b" with a combined jump+compare
+  // instruction.
+  //
+  // Note: to make this slightly easier to read, we make all this logic
+  // explicit below rather than collapsing it into a single test() call.
+  for (size_t i = 0; i < sequence.length() - 1; i++) {
+    sema::Expr* expr = sequence[i];
+    if (token == TOK_OR) {
+      if (jumpOnTrue)
+        test(expr, true, taken, fallthrough);
+      else
+        test(expr, true, fallthrough, taken);
+    } else {
+      if (jumpOnTrue)
+        test(expr, false, fallthrough, taken);
+      else
+        test(expr, false, taken, fallthrough);
+    }
+  }
+
+  sema::Expr* final_expr = sequence.back();
+  test(final_expr, jumpOnTrue, taken, fallthrough);
+}
+
+static inline void
+flatten_recursive(sema::Expr* expr, TokenKind token, ke::Vector<sema::Expr*>* out)
+{
+  sema::BinaryExpr* bin = expr->asBinaryExpr();
+  if (bin && bin->token() == token) {
+    flatten_recursive(bin->left(), token, out);
+    flatten_recursive(bin->right(), token, out);
+  } else {
+    out->append(expr);
+  }
+}
+
+ke::Vector<sema::Expr*>
+SmxCompiler::flatten(sema::BinaryExpr* expr)
+{
+  ke::Vector<sema::Expr*> out;
+  flatten_recursive(expr->left(), expr->token(), &out);
+  flatten_recursive(expr->right(), expr->token(), &out);
+  return out;
 }
 
 bool
@@ -841,6 +1000,26 @@ SmxCompiler::load_both(sema::Expr* left, sema::Expr* right)
 
   restore(saved_pri);
   return true;
+}
+
+void
+SmxCompiler::emit_const(ValueDest dest, cell_t value)
+{
+  will_kill(dest);
+
+  switch (dest) {
+    case ValueDest::Pri:
+      __ opcode(OP_CONST_PRI, value);
+      break;
+    case ValueDest::Alt:
+      __ opcode(OP_CONST_ALT, value);
+      break;
+    case ValueDest::Stack:
+      __ opcode(OP_PUSH_C, value);
+      break;
+    default:
+      assert(false);
+  }
 }
 
 void

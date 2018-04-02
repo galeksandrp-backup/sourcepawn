@@ -32,7 +32,8 @@ SemanticAnalysis::SemanticAnalysis(CompileContext &cc, TranslationUnit *tu)
    pool_(cc.pool()),
    types_(cc.types()),
    tu_(tu),
-   fs_(nullptr)
+   fs_(nullptr),
+   loop_depth_(0)
 {
 }
 
@@ -236,6 +237,12 @@ SemanticAnalysis::visitStatement(Statement* node)
     case AstKind::kBlockStatement:
       visitBlockStatement(node->toBlockStatement());
       break;
+    case AstKind::kIfStatement:
+      visitIfStatement(node->toIfStatement());
+      break;
+    case AstKind::kBreakStatement:
+      visitBreakStatement(node->toBreakStatement());
+      break;
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-stmt" << node->kindName();
@@ -294,6 +301,8 @@ SemanticAnalysis::visitVarDecl(VarDecl* node)
 void
 SemanticAnalysis::visitWhileStatement(WhileStatement* node)
 {
+  ke::SaveAndSet<size_t> enter_loop(&loop_depth_, loop_depth_ + 1);
+
   // :TODO: implement unintended-assignment warning
 
   // Even if we can't coerce the stop expression, we still type-check the body.
@@ -306,6 +315,25 @@ SemanticAnalysis::visitWhileStatement(WhileStatement* node)
 
   // :TODO: check for infinite loop, if no breaks.
   visitStatement(node->body());
+}
+
+void
+SemanticAnalysis::visitIfStatement(IfStatement* node)
+{
+  for (size_t i = 0; i < node->clauses()->length(); i++) {
+    IfClause& clause = node->clauses()->at(i);
+
+    clause.sema_cond = visitExpression(clause.cond);
+    if (clause.sema_cond) {
+      Type* boolType = types_->getPrimitive(PrimitiveType::Bool);
+      clause.sema_cond = coerce(clause.sema_cond, boolType, Coercion::Test);
+    }
+
+    visitStatement(clause.body);
+  }
+
+  if (Statement* body = node->fallthrough())
+    visitStatement(body);
 }
 
 void
@@ -331,6 +359,15 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement* node)
     return;
 
   node->set_sema_expr(expr);
+}
+
+void
+SemanticAnalysis::visitBreakStatement(BreakStatement* node)
+{
+  if (!loop_depth_) {
+    cc_.report(node->loc(), rmsg::break_outside_loop);
+    return;
+  }
 }
 
 void
@@ -428,6 +465,15 @@ SemanticAnalysis::visitBinaryExpression(BinaryExpression* node)
   if (!right)
     return nullptr;
 
+  // Logical operators need booleans on both sides.
+  if (node->token() == TOK_OR || node->token() == TOK_AND) {
+    Type* boolType = types_->getPrimitive(PrimitiveType::Bool);
+    if (!(left = coerce(left, boolType, Coercion::Test)))
+      return nullptr;
+    if (!(right = coerce(right, boolType, Coercion::Test)))
+      return nullptr;
+  }
+
   assert(left->type() == right->type());
 
   Type* type = nullptr;
@@ -451,6 +497,8 @@ SemanticAnalysis::visitBinaryExpression(BinaryExpression* node)
     case TOK_GE:
     case TOK_LT:
     case TOK_LE:
+    case TOK_OR:
+    case TOK_AND:
       type = types_->getPrimitive(PrimitiveType::Bool);
       break;
     default:
@@ -577,11 +625,15 @@ SemanticAnalysis::coerce_inner(sema::Expr* expr,
     if (from->primitive() == to->primitive())
       return expr;
 
-    if (from->primitive() == PrimitiveType::Bool ||
-        from->primitive() == PrimitiveType::Char)
+    if (to->primitive() == PrimitiveType::Int32 &&
+        (from->primitive() == PrimitiveType::Bool ||
+         from->primitive() == PrimitiveType::Char))
     {
       return new (pool_) sema::TrivialCastExpr(expr->src(), to, expr);
     }
+
+    if (to->primitive() == PrimitiveType::Bool)
+      return new (pool_) sema::TrivialCastExpr(expr->src(), to, expr);
 
     return no_conversion(expr, from, to);
   }

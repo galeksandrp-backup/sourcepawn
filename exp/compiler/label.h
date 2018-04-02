@@ -84,6 +84,11 @@ class Label
     assert(this->offset() == offset);
   }
 
+  void reset() {
+    assert(!used() || bound());
+    status_ = 0;
+  }
+
  protected:
   // Note that 0 as an invalid offset is okay, because the offset we save for
   // pending jumps are after the jump opcode itself, and therefore 0 is never

@@ -786,13 +786,12 @@ Parser::primary()
       case TOK_LPAREN:
       {
         expect(TOK_LPAREN);
-        SourceLocation loc = scanner_.begin();
 
         ExpressionList *args = callArgs();
         if (!args)
           return nullptr;
 
-        return new (pool_) CallExpression(loc, expr, args);
+        return new (pool_) CallExpression(expr->loc(), expr, args);
       }
 
       case TOK_DOT:
@@ -1742,20 +1741,18 @@ Parser::if_()
   if (!ifTrue)
     return nullptr;
 
-  IfStatement *outer = new (pool_) IfStatement(pos, cond, ifTrue);
+  PoolList<IfClause>* clauses = new (pool_) PoolList<IfClause>();
+  clauses->append(IfClause(cond, ifTrue));
 
-  IfStatement *last = outer;
+  Statement* fallthrough = nullptr;
+
   while (match(TOK_ELSE)) {
     if (!match(TOK_IF)) {
-      Statement *ifFalse = statementOrBlock();
-      if (!ifFalse)
+      if (!(fallthrough = statementOrBlock()))
         return nullptr;
-
-      last->setIfFalse(ifFalse);
       break;
     }
 
-    SourceLocation pos = scanner_.begin();
     if (!expect(TOK_LPAREN))
       return nullptr;
 
@@ -1770,14 +1767,11 @@ Parser::if_()
     if (!otherIfTrue)
       return nullptr;
 
-    IfStatement *inner = new (pool_) IfStatement(pos, otherCond, otherIfTrue);
-    last->setIfFalse(inner);
-    last = inner;
+    clauses->append(IfClause(otherCond, otherIfTrue));
   }
 
   requireNewline();
-
-  return outer;
+  return new (pool_) IfStatement(pos, clauses, fallthrough);
 }
 
 Statement *

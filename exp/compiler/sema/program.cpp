@@ -104,6 +104,26 @@ class SemaPrinter : public ast::StrictAstVisitor
     unindent();
   }
 
+  void visitBreakStatement(ast::BreakStatement* stmt) override {
+    prefix();
+    fprintf(fp_, "- BreakStatement\n");
+  }
+
+  void visitIfStatement(ast::IfStatement* node) override {
+    prefix();
+    fprintf(fp_, "- IfStatement\n");
+    indent();
+    {
+      for (size_t i = 0; i < node->clauses()->length(); i++) {
+        const ast::IfClause& clause = node->clauses()->at(i);
+        printExpr(clause.sema_cond);
+        clause.body->accept(this);
+      }
+      if (ast::Statement* stmt = node->fallthrough())
+        stmt->accept(this);
+    }
+  }
+
   void visitExpressionStatement(ast::ExpressionStatement* stmt) override {
     prefix();
     fprintf(fp_, "- ExpressionStatement\n");

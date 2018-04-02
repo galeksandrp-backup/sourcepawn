@@ -882,7 +882,8 @@ class WhileStatement : public Statement
     : Statement(pos),
       token_(kind),
       condition_(condition),
-      body_(body)
+      body_(body),
+      sema_cond_(nullptr)
   {
   }
   
@@ -1185,35 +1186,41 @@ class FunctionStatement :
   FunctionType *type_;
 };
 
+struct IfClause
+{
+  IfClause(Expression* cond, Statement* body)
+   : cond(cond),
+     body(body),
+     sema_cond(nullptr)
+  {}
+
+  Expression* cond;
+  Statement* body;
+  sema::Expr* sema_cond;
+};
+
 class IfStatement : public Statement
 {
-  Expression *condition_;
-  Statement *ifTrue_;
-  Statement *ifFalse_;
-
  public:
-  IfStatement(const SourceLocation &pos, Expression *condition, Statement *ifTrue)
-    : Statement(pos),
-      condition_(condition),
-      ifTrue_(ifTrue),
-      ifFalse_(nullptr)
+  IfStatement(const SourceLocation &pos, PoolList<IfClause>* clauses, Statement* fallthrough)
+   : Statement(pos),
+     clauses_(clauses),
+     fallthrough_(fallthrough)
   {
   }
 
   DECLARE_NODE(IfStatement);
 
-  Expression *condition() const {
-    return condition_;
+  PoolList<IfClause>* clauses() const {
+    return clauses_;
   }
-  Statement *ifTrue() const {
-    return ifTrue_;
+  Statement* fallthrough() const {
+    return fallthrough_;
   }
-  Statement *ifFalse() const {
-    return ifFalse_;
-  }
-  void setIfFalse(Statement *ifFalse) {
-    ifFalse_ = ifFalse;
-  }
+
+ private:
+  PoolList<IfClause>* clauses_;
+  Statement* fallthrough_;
 };
 
 // There is one EnumConstant per entry in an EnumStatement. We need this to be

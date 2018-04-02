@@ -48,6 +48,9 @@ class AssemblyBuffer
   size_t buffer_length() const {
     return buffer_pos_ - buffer_;
   }
+  uint32_t pc() const {
+    return static_cast<uint32_t>(buffer_pos_ - buffer_);
+  }
 
  protected:
   template <typename T>
@@ -69,10 +72,6 @@ class AssemblyBuffer
 
     assert(size_t(buffer_end_ - buffer_pos_) >= size);
     return true;
-  }
-
-  uint32_t pc() const {
-    return static_cast<uint32_t>(buffer_pos_ - buffer_);
   }
 
  private:

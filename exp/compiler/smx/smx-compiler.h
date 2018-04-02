@@ -45,6 +45,8 @@ private:
   void generateReturn(ast::ReturnStatement* stmt);
   void generateExprStatement(ast::ExpressionStatement* stmt);
   void generateWhile(ast::WhileStatement* stmt);
+  void generateIf(ast::IfStatement* stmt);
+  void generateBreak(ast::BreakStatement* stmt);
 
   // Allocate space and generate data for a local variable.
   void generateVarDecl(ast::VarDecl* decl);
@@ -69,16 +71,19 @@ private:
   ValueDest emitString(sema::StringExpr* expr, ValueDest dest);
 
 private:
-  struct TestContext {
-    Label taken;
-    Label fallthrough;
-  };
-  void test(sema::Expr* expr, bool jumpOnTrue, TestContext& cx);
+  void test(sema::Expr* expr, bool jumpOnTrue, Label* taken, Label* fallthrough);
+  void test_logical(sema::BinaryExpr* expr, bool jumpOnTrue, Label* taken, Label* fallthrough);
+
+  // Flatten a tree of BinaryExprs into a chain of the same operator.
+  ke::Vector<sema::Expr*> flatten(sema::BinaryExpr* expr);
 
   // Load two expressions into PRI and ALT.
   bool load_both(sema::Expr* left, sema::Expr* right);
 
 private:
+  // Store a constant value. Calls will_kill().
+  void emit_const(ValueDest dest, cell_t value);
+
   // Signal that the given register is about to be clobbered.
   void will_kill(ValueDest dest);
 
@@ -151,6 +156,13 @@ private:
   int32_t cur_var_stk_;
   DataLabel entry_stack_op_;
   Label common_return_;
+
+  // Current loop context. If we do nested functions, these have to be zapped
+  // at function boundaries.
+  Label* continue_to_;
+  Label* break_to_;
+
+  uint32_t last_stmt_pc_;
 };
 
 } // namespace sp
