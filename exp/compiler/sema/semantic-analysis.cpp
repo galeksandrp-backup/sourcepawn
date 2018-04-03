@@ -162,7 +162,7 @@ SemanticAnalysis::checkForwardedFunction(FunctionStatement *forward, FunctionSta
     return;
   }
    
-  if (!(impl->attrs() & DeclAttrs::Public)) {
+  if (impl->token() != TOK_PUBLIC) {
     cc_.report(impl->loc(), rmsg::illegal_forward_func)
       << impl->name()
       << cc_.note(forward->loc(), rmsg::previous_location);
@@ -286,8 +286,10 @@ void
 SemanticAnalysis::visitVarDecl(VarDecl* node)
 {
   VariableSymbol* sym = node->sym();
+  assert(node->classifier() == TOK_NEW);
 
   // :TODO: unused var analysis
+  // :TODO: multiple in chain
 
   sema::Expr* init = nullptr;
   if (node->initialization()) {

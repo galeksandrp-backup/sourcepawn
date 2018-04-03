@@ -24,6 +24,13 @@
 
 namespace sp {
 
+enum class SymAttrs
+{
+  None  = 0x0,
+  Stock = 0x1
+};
+KE_DEFINE_ENUM_OPERATORS(SymAttrs)
+
 // Storage class for variables.
 enum class StorageClass : int32_t
 {

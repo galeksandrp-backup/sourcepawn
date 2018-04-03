@@ -134,8 +134,8 @@ class Parser
   Statement *if_();
   Statement *block();
   BlockStatement *methodBody();
-  Statement *variable(TokenKind tok, Declaration *decl, uint32_t flags);
-  Statement *function(TokenKind tok, Declaration &decl, uint32_t attrs);
+  Statement *variable(TokenKind tok, Declaration *decl, SymAttrs flags, uint32_t decl_flags);
+  Statement *function(TokenKind tok, Declaration &decl, SymAttrs flags);
   Statement *expressionStatement();
   Statement *while_();
   Statement *do_();

@@ -196,14 +196,6 @@ typedef PoolList<Statement *> StatementList;
 typedef PoolList<Expression *> ExpressionList;
 typedef PoolList<VarDecl *> ParameterList;
 
-namespace DeclAttrs
-{
-  static const uint32_t None   = 0x0;
-  static const uint32_t Static = 0x1;
-  static const uint32_t Public = 0x2;
-  static const uint32_t Stock  = 0x4;
-};
-
 class FunctionSignature : public PoolObject
 {
  public:
@@ -258,13 +250,14 @@ class FunctionSignature : public PoolObject
 class VarDecl : public Statement
 {
  public:
-  VarDecl(const NameToken &name, Expression *initialization)
+  VarDecl(const NameToken &name, TokenKind classifier, Expression *initialization)
    : Statement(name.start),
      name_(name.atom),
      initialization_(initialization),
      sema_init_(nullptr),
      sym_(nullptr),
-     next_(nullptr)
+     next_(nullptr),
+     classifier_(classifier)
   {
   }
 
@@ -295,6 +288,9 @@ class VarDecl : public Statement
   VariableSymbol *sym() const {
     return sym_;
   }
+  TokenKind classifier() const {
+    return classifier_;
+  }
 
   // This is only valid after type resolution.
   Type* type() const {
@@ -320,6 +316,7 @@ class VarDecl : public Statement
   TypeExpr te_;
   VariableSymbol *sym_;
   VarDecl *next_;
+  TokenKind classifier_;
 };
 
 class NameProxy : public Expression
@@ -1139,13 +1136,13 @@ class FunctionStatement :
   public FunctionNode
 {
  public:
-  FunctionStatement(const NameToken &name, TokenKind kind, uint32_t attrs)
+  FunctionStatement(const NameToken &name, TokenKind kind, SymAttrs flags)
    : Statement(name.start),
      FunctionNode(kind),
      name_(name),
-     attrs_(attrs),
      sym_(nullptr),
-     type_(nullptr)
+     type_(nullptr),
+     flags_(flags)
   {
   }
 
@@ -1161,8 +1158,8 @@ class FunctionStatement :
   FunctionSymbol *sym() const {
     return sym_;
   }
-  uint32_t attrs() const {
-    return attrs_;
+  Flags<SymAttrs> flags() const {
+    return flags_;
   }
 
   // These are used in the function -> value decay operation. Since most
@@ -1179,22 +1176,23 @@ class FunctionStatement :
       return "forward";
     if (token() == TOK_NATIVE)
       return "native";
-    if (attrs_ & DeclAttrs::Public)
+    if (token() == TOK_PUBLIC)
       return "public";
-    if (attrs_ & DeclAttrs::Stock)
-      return "stock";
-    if (attrs_ & DeclAttrs::Static)
+    if (token() == TOK_STATIC) {
+      if (flags_ & SymAttrs::Stock)
+        return "static stock";
       return "static";
-    if (attrs_ & (DeclAttrs::Static|DeclAttrs::Stock))
-      return "static stock";
+    }
+    if (flags_ & SymAttrs::Stock)
+      return "stock";
     return "function";
   }
 
  private:
   NameToken name_;
-  uint32_t attrs_;
   FunctionSymbol *sym_;
   FunctionType *type_;
+  Flags<SymAttrs> flags_;
 };
 
 struct IfClause

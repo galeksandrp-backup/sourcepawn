@@ -39,7 +39,7 @@ class NameResolver
   void OnTagProxy(NameProxy *proxy);
   void OnEnumDecl(EnumStatement *node);
   void OnEnumValueDecl(EnumConstant *cs);
-  VarDecl *HandleVarDecl(NameToken name, TypeSpecifier &spec, Expression *init);
+  VarDecl *HandleVarDecl(NameToken name, TokenKind kind, SymAttrs flags, TypeSpecifier &spec, Expression *init);
   void OnEnterMethodmap(MethodmapDecl *methodmap);
   void OnLeaveMethodmap(MethodmapDecl *methodmap);
   void OnEnterRecordDecl(RecordDecl *decl);

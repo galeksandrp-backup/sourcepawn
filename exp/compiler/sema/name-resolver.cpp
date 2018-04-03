@@ -307,12 +307,12 @@ NameResolver::OnEnumValueDecl(EnumConstant *cs)
 }
 
 VarDecl *
-NameResolver::HandleVarDecl(NameToken name, TypeSpecifier &spec, Expression *init)
+NameResolver::HandleVarDecl(NameToken name, TokenKind kind, SymAttrs flags, TypeSpecifier &spec, Expression *init)
 {
-  Scope *scope = getOrCreateScope();
+  assert(flags == SymAttrs::None);
 
-  // :TODO: set variadic info
-  VarDecl *var = new (pool_) VarDecl(name, init);
+  Scope *scope = getOrCreateScope();
+  VarDecl *var = new (pool_) VarDecl(name, kind, init);
 
   // Note: the parser has already bound |var->init()| at this point, meaning
   // that aside from globals it should be impossible to self-initialize like:

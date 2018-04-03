@@ -184,7 +184,7 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
   __ opcode(OP_ENDPROC);
 
   Atom* name = fun->name();
-  if (!(fun->attrs() & ast::DeclAttrs::Public)) {
+  if (fun->token() != TOK_PUBLIC) {
     // We add all functions to the publics table as a great compatibility hack:
     // it makes the functions invisible (and hard to reliably predict) to other
     // plugins, as well as the VM, but lets us use the ancient FunctionId scheme
