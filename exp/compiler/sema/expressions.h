@@ -78,6 +78,9 @@ public:
   virtual bool isConstant() const {
     return false;
   }
+  virtual bool getBoxedValue(BoxedValue* out) const {
+    return false;
+  }
 
 #define _(name)                                 \
   virtual name##Expr* as##name##Expr() {        \
@@ -125,6 +128,10 @@ public:
     return value_;
   }
   bool isConstant() const override {
+    return true;
+  }
+  bool getBoxedValue(BoxedValue* out) const override {
+    *out = value_;
     return true;
   }
 

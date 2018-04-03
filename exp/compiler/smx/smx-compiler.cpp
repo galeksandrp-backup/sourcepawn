@@ -153,6 +153,23 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
   __ bind(fun->address());
   __ opcode(OP_PROC);
 
+    // :TODO:  cap input at INT_MAX bytes to implicitly limit switch cases/args
+    // then remove too_many_cases
+
+  // Allocate arguments.
+  static const size_t kFirstArgSlot = 3;
+  static const size_t kMaxArgSlots = (INT_MAX / 4) - kFirstArgSlot;
+
+  ast::FunctionSignature* sig = fun->signature();
+  ast::ParameterList* params = sig->parameters();
+  if (params->length() >= kMaxArgSlots)
+    cc_.report(fun->loc(), rmsg::too_many_arguments);
+
+  for (size_t i = 0; i < params->length(); i++) {
+    VariableSymbol* param = params->at(i)->sym();
+    param->allocate(StorageClass::Argument, (i + kFirstArgSlot) * sizeof(cell_t));
+  }
+
   // :TODO: don't generate if no local vars
   __ opcode(OP_STACK, &entry_stack_op_);
 
@@ -225,6 +242,9 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
     case ast::AstKind::kBreakStatement:
       generateBreak(stmt->toBreakStatement());
       break;
+    case ast::AstKind::kSwitchStatement:
+      generateSwitch(stmt->toSwitchStatement());
+      break;
     default:
       cc_.report(stmt->loc(), rmsg::unimpl_kind) <<
         "smx-gen-stmt" << stmt->kindName();
@@ -290,6 +310,9 @@ SmxCompiler::generateVarDecl(ast::VarDecl* stmt)
     }
 
     store_into(sym, init);
+  } else {
+    assert(false);
+    // :TODO: store 0
   }
 }
 
@@ -412,6 +435,62 @@ void
 SmxCompiler::generateBreak(ast::BreakStatement* stmt)
 {
   __ opcode(OP_JUMP, break_to_);
+}
+
+void
+SmxCompiler::generateSwitch(ast::SwitchStatement* stmt)
+{
+  PoolList<ast::Case*>* cases = stmt->cases();
+
+  size_t total_cases = 0;
+  for (size_t i = 0; i < cases->length(); i++) {
+    ast::Case* entry = cases->at(i);
+    total_cases += entry->values()->length();
+  }
+
+  if (total_cases >= INT_MAX) {
+    cc_.report(stmt->loc(), rmsg::too_many_cases);
+    return;
+  }
+
+  if (!emit_into(stmt->sema_expr(), ValueDest::Pri))
+    return;
+
+  Label casetbl, defcase;
+  __ opcode(OP_SWITCH, &casetbl);
+  __ bind(&casetbl);
+  __ casetbl(total_cases, &defcase);
+
+  ke::UniquePtr<Label[]> labels(new Label[cases->length()]);
+
+  // Generate entries for the CASETBL opcode above.
+  for (size_t i = 0; i < cases->length(); i++) {
+    ast::Case* entry = cases->at(i);
+
+    for (size_t j = 0; j < entry->values()->length(); j++) {
+      cell_t value = entry->values()->at(j);
+      __ casetbl_entry(value, &labels[i]);
+    }
+  }
+
+  Label done;
+
+  // Now generate the actual switch cases.
+  for (size_t i = 0; i < cases->length(); i++) {
+    ast::Case* entry = cases->at(i);
+
+    __ bind(&labels[i]);
+    generateStatement(entry->statement());
+
+    // All but the very last case should jump past the other cases.
+    if (i != cases->length() - 1 || stmt->defaultCase())
+      __ opcode(OP_JUMP, &done);
+  }
+
+  __ bind(&defcase);
+  if (ast::Statement* defaultCase = stmt->defaultCase())
+    generateStatement(defaultCase);
+  __ bind(&done);
 }
 
 bool
@@ -795,6 +874,12 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
 
   // TODO make sure we verify that call labels are bound
   sema::ExprList* args = expr->args();
+
+  // This would overflow the PUSH_C opcode below.
+  static const size_t kMaxArgs = (INT_MAX / sizeof(cell_t)) - 1;
+  if (args->length() > kMaxArgs)
+    cc_.report(expr->src()->loc(), rmsg::too_many_arguments);
+
   for (size_t i = args->length() - 1; i < args->length(); i--) {
     sema::Expr* expr = args->at(i);
 
@@ -819,6 +904,7 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
     __ sysreq_n(fun->impl()->address(), (uint32_t)args->length());
     assert(fun->impl()->address()->used());
   } else {
+    __ opcode(OP_PUSH_C, cell_t(args->length()));
     __ opcode(OP_CALL, fun->impl()->address());
   }
 
@@ -995,6 +1081,8 @@ void
 SmxCompiler::test(sema::Expr* expr, bool jumpOnTrue, Label* taken, Label* fallthrough)
 {
   if (sema::BinaryExpr* bin = expr->asBinaryExpr()) {
+    // Optimize comparators into their jump-conditional instructions, to avoid
+    // needing intermediate values.
     OPCODE op = BinaryOpHasInlineTest(bin->token());
     if (op != OP_NOP) {
       if (!jumpOnTrue)
@@ -1005,6 +1093,7 @@ SmxCompiler::test(sema::Expr* expr, bool jumpOnTrue, Label* taken, Label* fallth
       return;
     }
 
+    // Optimize || and && so that no intermediate storage is needed.
     if (bin->token() == TOK_OR || bin->token() == TOK_AND) {
       test_logical(bin, jumpOnTrue, taken, fallthrough);
       return;
@@ -1012,6 +1101,7 @@ SmxCompiler::test(sema::Expr* expr, bool jumpOnTrue, Label* taken, Label* fallth
   }
 
   if (sema::UnaryExpr* unary = expr->asUnaryExpr()) {
+    // Optimize ! away.
     if (unary->token() == TOK_NOT) {
       // Note: we re-enter test so we can peel away more operations underneath the !
       test(unary->expr(), !jumpOnTrue, taken, fallthrough);
@@ -1019,6 +1109,8 @@ SmxCompiler::test(sema::Expr* expr, bool jumpOnTrue, Label* taken, Label* fallth
     }
   }
 
+  // If we get here, there were no obvious shortcuts to take, so we will
+  // simply emit the expression and test if it's zero.
   if (!emit_into(expr, ValueDest::Pri))
     return;
 

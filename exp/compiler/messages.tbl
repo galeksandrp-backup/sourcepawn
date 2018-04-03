@@ -147,7 +147,11 @@ RMSG(cannot_coerce,                 type,              "cannot coerce type '%0' 
 RMSG(global_non_const_init,         type,              "global variable '%0' has non-constant initializer")
 RMSG(illegal_lvalue,                type,              "expression must be an l-value")
 RMSG(lvalue_is_const,               type,              "l-value cannot be modified")
+RMSG(illegal_case,                  type,              "switch cases must be constant integer values")
+RMSG(illegal_64bit_case,            type,              "switch cases must be 32-bit values")
 
+RMSG(too_many_cases,                impl,              "too many switch cases")
+RMSG(too_many_arguments,            impl,              "function takes too many arguments")
 RMSG(too_much_stack,                impl,              "function uses too much stack space")
 
 RMSG(int_literal_out_of_range,      syntax,            "integer literal is out of range")

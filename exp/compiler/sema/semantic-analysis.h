@@ -51,6 +51,7 @@ class SemanticAnalysis
   void visitForStatement(ForStatement* node);
   void visitIfStatement(IfStatement* node);
   void visitBreakStatement(BreakStatement* node);
+  void visitSwitchStatement(SwitchStatement* node);
 
   sema::Expr* visitExpression(Expression* node);
   sema::ConstValueExpr* visitIntegerLiteral(IntegerLiteral* node);

@@ -146,6 +146,44 @@ class SemaPrinter : public ast::StrictAstVisitor
       if (ast::Statement* stmt = node->fallthrough())
         stmt->accept(this);
     }
+    unindent();
+  }
+
+  void visitSwitchStatement(ast::SwitchStatement* node) override {
+    prefix();
+    fprintf(fp_, "- SwitchStatement\n");
+    indent();
+    {
+      for (size_t i = 0; i < node->cases()->length(); i++) {
+        ast::Case* entry = node->cases()->at(i);
+
+        prefix();
+        fprintf(fp_, "case: ");
+        for (size_t j = 0; j < entry->values()->length(); j++) {
+          fprintf(fp_, "%d", entry->values()->at(j));
+          if (j != entry->values()->length() - 1)
+            fprintf(fp_, ",");
+        }
+        fprintf(fp_, "\n");
+
+        indent();
+        {
+          entry->statement()->accept(this);
+        }
+        unindent();
+      }
+
+      if (ast::Statement* stmt = node->defaultCase()) {
+        prefix();
+        fprintf(fp_, "default:\n");
+        indent();
+        {
+          stmt->accept(this);
+        }
+        unindent();
+      }
+    }
+    unindent();
   }
 
   void visitExpressionStatement(ast::ExpressionStatement* stmt) override {

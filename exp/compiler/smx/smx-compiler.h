@@ -48,6 +48,7 @@ private:
   void generateFor(ast::ForStatement* stmt);
   void generateIf(ast::IfStatement* stmt);
   void generateBreak(ast::BreakStatement* stmt);
+  void generateSwitch(ast::SwitchStatement* stmt);
 
   // Allocate space and generate data for a local variable.
   void generateVarDecl(ast::VarDecl* decl);

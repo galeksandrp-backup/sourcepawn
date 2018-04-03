@@ -210,7 +210,7 @@ class FunctionSignature : public PoolObject
   FunctionSignature()
   {}
 
-  FunctionSignature(const TypeExpr &returnType, ParameterList *parameters)
+  FunctionSignature(const TypeExpr& returnType, ParameterList* parameters)
    : returnType_(returnType),
      parameters_(parameters),
      destructor_(false),
@@ -219,13 +219,13 @@ class FunctionSignature : public PoolObject
   {
   }
 
-  TypeExpr &returnType() {
+  TypeExpr& returnType() {
     return returnType_;
   }
-  const TypeExpr &returnType() const {
+  const TypeExpr& returnType() const {
     return returnType_;
   }
-  ParameterList *parameters() const {
+  ParameterList* parameters() const {
     return parameters_;
   }
   bool destructor() const {
@@ -249,7 +249,7 @@ class FunctionSignature : public PoolObject
 
  private:
   TypeExpr returnType_;
-  ParameterList *parameters_;
+  ParameterList* parameters_;
   bool destructor_ : 1;
   bool native_ : 1;
   bool resolved_ : 1;
@@ -814,13 +814,13 @@ class ForStatement : public Statement
   ForStatement(const SourceLocation &pos, Statement *initialization,
                Expression *condition, Statement *update, Statement *body,
                Scope *scope)
-    : Statement(pos),
-      initialization_(initialization),
-      condition_(condition),
-      update_(update),
-      body_(body),
-      scope_(scope),
-      sema_cond_(nullptr)
+   : Statement(pos),
+     initialization_(initialization),
+     condition_(condition),
+     update_(update),
+     body_(body),
+     scope_(scope),
+     sema_cond_(nullptr)
   {
   }
 
@@ -1375,77 +1375,76 @@ class Case : public PoolObject
 {
  public:
   Case(Expression *expression, ExpressionList *others, Statement *statement)
-    : expression_(expression),
-    others_(others),
-    statement_(statement)
+   : expression_(expression),
+     others_(others),
+     statement_(statement),
+     values_(nullptr)
   {
   }
 
-  Expression *expression() const {
+  Expression* expression() const {
     return expression_;
   }
-  PoolList<Expression *> *others() const {
+  PoolList<Expression*>* others() const {
     return others_;
   }
-  Statement *statement() const {
+  Statement* statement() const {
     return statement_;
   }
 
- private:
-  Expression *expression_;
-  PoolList <Expression *> *others_;
-  Statement *statement_;
-};
-
-struct CaseValue
-{
-  BoxedValue value;
-  size_t statement;
-
-  CaseValue(size_t statement)
-    : statement(statement)
-  {
+  void setValues(FixedPoolList<int32_t>* values) {
+    values_ = values;
   }
-};
+  const FixedPoolList<int32_t>* values() const {
+    return values_;
+  }
 
-typedef PoolList<CaseValue> CaseValueList;
+ private:
+  Expression* expression_;
+  PoolList<Expression*>* others_;
+  Statement* statement_;
+
+  // Filled in later by semantic analysis.
+  FixedPoolList<int32_t>* values_;
+};
 
 class SwitchStatement : public Statement
 {
  public:
-  SwitchStatement(const SourceLocation &pos, Expression *expression, PoolList<Case *> *cases,
-                  Statement *def)
+  SwitchStatement(const SourceLocation& pos, Expression* expression, PoolList<Case*>* cases,
+                  Statement* def)
    : Statement(pos),
      expression_(expression),
      cases_(cases),
      default_(def),
-     table_(nullptr)
+     sema_expr_(nullptr)
   {
   }
 
   DECLARE_NODE(SwitchStatement);
 
-  Expression *expression() const {
+  Expression* expression() const {
     return expression_;
   }
-  PoolList<Case *> *cases() const {
+  PoolList<Case*>* cases() const {
     return cases_;
   }
-  Statement *defaultCase() const {
+  Statement* defaultCase() const {
     return default_;
   }
-  void setCaseValueList(CaseValueList *list) {
-    table_ = list;
+
+  sema::Expr* sema_expr() const {
+    return sema_expr_;
   }
-  CaseValueList *caseValueList() const {
-    return table_;
+  void set_sema_expr(sema::Expr* expr) {
+    sema_expr_ = expr;
   }
 
  private:
-  Expression *expression_;
-  PoolList<Case *> *cases_;
-  Statement *default_;
-  CaseValueList *table_;
+  Expression* expression_;
+  PoolList<Case*>* cases_;
+  Statement* default_;
+  sema::Expr* sema_expr_;
 };
 
 class LayoutDecl : public Statement

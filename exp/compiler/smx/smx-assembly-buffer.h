@@ -47,6 +47,16 @@ class SmxAssemblyBuffer : public AssemblyBuffer
     value->use(pc());
   }
 
+  void casetbl(cell_t ncases, Label* def) {
+    write<cell_t>(static_cast<cell_t>(OP_CASETBL));
+    write<cell_t>(ncases);
+    encodeAbsoluteAddress(def);
+  }
+  void casetbl_entry(cell_t value, Label* where) {
+    write<cell_t>(value);
+    encodeAbsoluteAddress(where);
+  }
+
   void sysreq_n(Label* address, uint32_t nparams) {
     write<cell_t>(static_cast<cell_t>(OP_SYSREQ_N));
     encodeAbsoluteAddress(address);

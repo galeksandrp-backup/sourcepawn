@@ -246,6 +246,9 @@ SemanticAnalysis::visitStatement(Statement* node)
     case AstKind::kBreakStatement:
       visitBreakStatement(node->toBreakStatement());
       break;
+    case AstKind::kSwitchStatement:
+      visitSwitchStatement(node->toSwitchStatement());
+      break;
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-stmt" << node->kindName();
@@ -407,6 +410,67 @@ SemanticAnalysis::visitBreakStatement(BreakStatement* node)
     cc_.report(node->loc(), rmsg::break_outside_loop);
     return;
   }
+}
+
+void
+SemanticAnalysis::visitSwitchStatement(SwitchStatement* node)
+{
+  Type* type = nullptr;
+  sema::Expr* expr = visitExpression(node->expression());
+  if (expr) {
+    Type* boolType = types_->getBool();
+    if ((expr = coerce(expr, boolType, Coercion::Test)) != nullptr) {
+      type = expr->type();
+      node->set_sema_expr(expr);
+    }
+  }
+
+  auto get_value = [&, this](Expression* case_expr) -> int32_t {
+    sema::Expr* expr = visitExpression(case_expr);
+    if (!expr)
+      return 0;
+
+    if (type && !coerce(expr, type, Coercion::Expr))
+      return 0;
+
+    BoxedValue box;
+    if (!expr->getBoxedValue(&box) || !box.isInteger()) {
+      cc_.report(case_expr->loc(), rmsg::illegal_case);
+      return 0;
+    }
+
+    const IntValue& ival = box.toInteger();
+    if (ival.numBits() > (sizeof(int32_t) * 8)) {
+      cc_.report(case_expr->loc(), rmsg::illegal_64bit_case);
+      return 0;
+    }
+
+    return ival.asSigned();
+  };
+
+  PoolList<ast::Case*>* cases = node->cases();
+  for (size_t i = 0; i < cases->length(); i++) {
+    ast::Case* entry = cases->at(i);
+
+    size_t ncases = 1 + (entry->others()
+                         ? entry->others()->length()
+                         : 0);
+    FixedPoolList<int32_t>* values = new (pool_) FixedPoolList<int32_t>(ncases);
+
+    values->at(0) = get_value(entry->expression());
+    if (const auto& others = entry->others()) {
+      for (size_t j = 0; j < others->length(); j++)
+        values->at(j + 1) = get_value(others->at(j));
+    }
+    entry->setValues(values);
+
+    visitStatement(entry->statement());
+
+    // :TODO: detect duplicates?
+  }
+
+  if (Statement* stmt = node->defaultCase())
+    visitStatement(stmt);
 }
 
 void
@@ -581,6 +645,8 @@ SemanticAnalysis::visitStringLiteral(ast::StringLiteral* node)
 
   return new (pool_) sema::StringExpr(node, strLitType, node->literal());
 }
+
+// :TODO: write tests for weird operators on weird types, like ++function or function - function.
 
 sema::Expr*
 SemanticAnalysis::visitIncDec(ast::IncDecExpression* node)
