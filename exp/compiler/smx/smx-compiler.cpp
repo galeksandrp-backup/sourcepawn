@@ -78,15 +78,20 @@ SmxCompiler::compile()
     return false;
   }
 
-  // :TODO: error
-  assert(publics_.length());
-  qsort(publics_.buffer(), publics_.length(), sizeof(FunctionEntry), sort_functions);
-  if (natives_.length())
-    qsort(natives_.buffer(), natives_.length(), sizeof(FunctionEntry), sort_functions);
-
   assert(masm_.buffer_length() % sizeof(cell_t) == 0);
-  assert(data_.size() % sizeof(cell_t) == 0);
 
+  add_code();
+  add_data();
+  add_natives();
+  add_publics();
+  add_pubvars();
+
+  return cc_.phasePassed();
+}
+
+void
+SmxCompiler::add_code()
+{
   RefPtr<SmxCodeSection> code = new SmxCodeSection(".code");
   code->header().codesize = masm_.buffer_length();
   code->header().cellsize = sizeof(cell_t);
@@ -96,6 +101,12 @@ SmxCompiler::compile()
   code->header().code = sizeof(sp_file_code_t);
   code->setBlob(masm_.buffer(), masm_.buffer_length());
   builder_.add(code);
+}
+
+void
+SmxCompiler::add_data()
+{
+  assert(data_.size() % sizeof(cell_t) == 0);
 
   // Ensure the data section has at least one value.
   // :TODO: clean up data handling, check <= INT_MAX, not overflowed
@@ -108,19 +119,13 @@ SmxCompiler::compile()
   data->header().data = sizeof(sp_file_data_t);
   data->setBlob(data_.bytes(), data_.size());
   builder_.add(data);
+}
 
-  RefPtr<SmxPublicSection> publics = new SmxPublicSection(".publics");
-  for (size_t i = 0; i < publics_.length(); i++) {
-    const FunctionEntry& entry = publics_[i];
-
-    sp_file_publics_t& pf = publics->add();
-    pf.address = entry.fun->address()->offset();
-    pf.name = names_->add(entry.name);
-  }
-  builder_.add(publics);
-
-  RefPtr<SmxPubvarSection> pubvars = new SmxPubvarSection(".pubvars");
-  builder_.add(pubvars);
+void
+SmxCompiler::add_natives()
+{
+  if (natives_.length())
+    qsort(natives_.buffer(), natives_.length(), sizeof(FunctionEntry), sort_functions);
 
   RefPtr<SmxNativeSection> natives =  new SmxNativeSection(".natives");
   for (size_t i = 0; i < natives_.length(); i++) {
@@ -132,8 +137,49 @@ SmxCompiler::compile()
     __ bind_to(entry.fun->address(), (uint32_t)i);
   }
   builder_.add(natives);
+}
 
-  return cc_.phasePassed();
+void
+SmxCompiler::add_publics()
+{
+  // :TODO: error
+  assert(publics_.length());
+  qsort(publics_.buffer(), publics_.length(), sizeof(FunctionEntry), sort_functions);
+
+  RefPtr<SmxPublicSection> publics = new SmxPublicSection(".publics");
+  for (size_t i = 0; i < publics_.length(); i++) {
+    const FunctionEntry& entry = publics_[i];
+
+    sp_file_publics_t& pf = publics->add();
+    pf.address = entry.fun->address()->offset();
+    pf.name = names_->add(entry.name);
+  }
+  builder_.add(publics);
+}
+
+static int
+sort_vars(const void* a1, const void* a2)
+{
+  ast::VarDecl* var1 = *(ast::VarDecl**)a1;
+  ast::VarDecl* var2 = *(ast::VarDecl**)a2;
+  return strcmp(var1->name()->chars(), var2->name()->chars());
+}
+
+void
+SmxCompiler::add_pubvars()
+{
+  qsort(program_->globals.buffer(), program_->globals.length(), sizeof(ast::VarDecl*), sort_vars);
+
+  RefPtr<SmxPubvarSection> pubvars = new SmxPubvarSection(".pubvars");
+  for (ast::VarDecl* decl : program_->globals) {
+    if (decl->classifier() != TOK_PUBLIC)
+      continue;
+
+    sp_file_pubvars_t& pv = pubvars->add();
+    pv.address = decl->sym()->address();
+    pv.name = names_->add(decl->name());
+  }
+  builder_.add(pubvars);
 }
 
 bool
@@ -1383,10 +1429,10 @@ SmxCompiler::compute_storage_size(Type* type)
 }
 
 int
-SmxCompiler::sort_functions(const void *a1, const void *a2)
+SmxCompiler::sort_functions(const void* a1, const void* a2)
 {
-  FunctionEntry &f1 = *(FunctionEntry *)a1;
-  FunctionEntry &f2 = *(FunctionEntry *)a2;
+  FunctionEntry& f1 = *(FunctionEntry *)a1;
+  FunctionEntry& f2 = *(FunctionEntry *)a2;
   return strcmp(f1.name->chars(), f2.name->chars());
 }
 

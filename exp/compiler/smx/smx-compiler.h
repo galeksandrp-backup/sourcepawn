@@ -124,6 +124,12 @@ private:
 private:
   static int sort_functions(const void *a1, const void *a2);
 
+  void add_code();
+  void add_data();
+  void add_natives();
+  void add_publics();
+  void add_pubvars();
+
 private:
   CompileContext& cc_;
   sema::Program* program_;

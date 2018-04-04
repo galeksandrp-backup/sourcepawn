@@ -32,6 +32,7 @@ using namespace ke;
 namespace ast {
 class AstNode;
 class FunctionStatement;
+class VarDecl;
 } // namespace ast
 
 class String;
@@ -109,7 +110,7 @@ class Symbol : public PoolObject
 class VariableSymbol : public Symbol
 {
  public:
-  VariableSymbol(ast::AstNode *node, Scope *scope, Atom *name)
+  VariableSymbol(ast::AstNode* node, Scope* scope, Atom* name)
    : Symbol(node, scope, name),
      storage_(StorageClass::Unknown),
      storage_flags_(StorageFlags::none),
@@ -124,11 +125,11 @@ class VariableSymbol : public Symbol
   Kind kind() const override {
     return kVariable;
   }
-  const char *kindName() const override {
+  const char* kindName() const override {
     return "variable";
   }
 
-  void setType(Type *type) {
+  void setType(Type* type) {
     assert(!type_ || type_->isUnresolvable());
     type_ = type;
   }
@@ -143,7 +144,7 @@ class VariableSymbol : public Symbol
     assert(storage() != StorageClass::Unknown);
     return address_;
   }
-  Type *type() const {
+  Type* type() const {
     return type_;
   }
 
@@ -208,7 +209,7 @@ class VariableSymbol : public Symbol
   StorageClass storage_;
   ke::Flags<StorageFlags> storage_flags_;
   int32_t address_;
-  Type *type_;
+  Type* type_;
   BoxedValue constant_;
 };
 

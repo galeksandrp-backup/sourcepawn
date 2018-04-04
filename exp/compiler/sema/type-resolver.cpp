@@ -986,6 +986,14 @@ TypeResolver::applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper
   return cc_.types()->newReference(type);
 }
 
+static inline bool
+IsAllowableStructDecl(VariableSymbol* sym, Type *type)
+{
+  return type->isStruct() &&
+         sym->scope()->kind() == Scope::Global &&
+         sym->node()->toVarDecl()->classifier() == TOK_PUBLIC;
+}
+
 bool
 TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
 {
@@ -995,8 +1003,11 @@ TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
   assert(sym->isByRef() == type->isReference());
   assert(!sym->isByRef() || sym->isArgument());
   if (!type->isStorableType()) {
-    cc_.report(sym->node()->loc(), rmsg::cannot_use_type_in_decl) << type;
-    return false;
+    // We make a very specific exception for public structs, which are barely supported.
+    if (!IsAllowableStructDecl(sym, type)) {
+      cc_.report(sym->node()->loc(), rmsg::cannot_use_type_in_decl) << type;
+      return false;
+    }
   }
 
   sym->setType(type);

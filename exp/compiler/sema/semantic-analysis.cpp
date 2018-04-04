@@ -286,7 +286,7 @@ void
 SemanticAnalysis::visitVarDecl(VarDecl* node)
 {
   VariableSymbol* sym = node->sym();
-  assert(node->classifier() == TOK_NEW);
+  assert(node->classifier() == TOK_NEW || node->classifier() == TOK_PUBLIC);
 
   // :TODO: unused var analysis
   // :TODO: multiple in chain
@@ -302,6 +302,9 @@ SemanticAnalysis::visitVarDecl(VarDecl* node)
     }
 
     node->set_sema_init(init);
+  } else {
+    // Initialize to 0!
+    assert(false);
   }
 
   if (sym->scope()->kind() == Scope::Global)
