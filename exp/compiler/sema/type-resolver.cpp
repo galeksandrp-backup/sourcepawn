@@ -190,7 +190,11 @@ TypeResolver::visitVarDecl(VarDecl *node)
 {
   VariableSymbol *sym = node->sym();
 
-  assert(!sym->type());
+  if (sym->type() && !sym->canUseInConstExpr()) {
+    // This was already resolved earlier - it's part of a function signature.
+    assert(sym->scope()->kind() == Scope::Argument);
+    return;
+  }
 
   Type* type;
   if (TypeSpecifier *spec = node->te().spec()) {
@@ -226,7 +230,7 @@ TypeResolver::visitVarDecl(VarDecl *node)
     type = node->te().resolved();
   }
 
-  if (!assignTypeToSymbol(sym, type))
+  if (!sym->type() && !assignTypeToSymbol(sym, type))
     return;
 
   if (sym->isConstExpr() || !sym->canUseInConstExpr())
@@ -1002,6 +1006,8 @@ TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
 
   assert(sym->isByRef() == type->isReference());
   assert(!sym->isByRef() || sym->isArgument());
+
+  // :TODO: why is this here? move it into sema.
   if (!type->isStorableType()) {
     // We make a very specific exception for public structs, which are barely supported.
     if (!IsAllowableStructDecl(sym, type)) {
