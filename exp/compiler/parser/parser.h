@@ -148,6 +148,7 @@ class Parser
   Statement *struct_(TokenKind tok);
   Statement *typeset_();
   Statement *global(TokenKind tok);
+  bool using_();
 
  private:
   CompileContext &cc_;
@@ -156,6 +157,7 @@ class Parser
   const CompileOptions &options_;
   NameResolver &delegate_;
   bool allowDeclarations_;
+  bool uses_handle_intrinsics_;
 
   Atom *atom_Float_;
   Atom *atom_String_;

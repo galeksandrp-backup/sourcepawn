@@ -33,7 +33,8 @@ Parser::Parser(CompileContext &cc, Preprocessor &pp, NameResolver &resolver)
   scanner_(pp),
   options_(cc_.options()),
   delegate_(resolver),
-  allowDeclarations_(true)
+  allowDeclarations_(true),
+  uses_handle_intrinsics_(false)
 {
   atom_Float_ = cc_.add("Float");
   atom_String_ = cc_.add("String");
@@ -1630,7 +1631,7 @@ Parser::localVarDecl(TokenKind kind, uint32_t flags)
   if (!parse_decl(&decl, flags))
     return nullptr;
 
-  return variable(kind, &decl, SymAttrs::None, 0);
+  return variable(kind, &decl, SymAttrs::None, flags);
 }
 
 Statement *
@@ -2194,6 +2195,28 @@ Parser::typedef_()
   return delegate_.HandleTypedefDecl(begin, name, spec);
 }
 
+bool
+Parser::using_()
+{
+  if (!expect(TOK_INTRINSICS))
+    return false;
+  if (!expect(TOK_DOT))
+    return false;
+
+  Atom* name = expectName();
+  if (!name)
+    return false;
+
+  if (strcmp(name->chars(), "Handle") == 0) {
+    uses_handle_intrinsics_ = true;
+    return true;
+  }
+
+  cc_.report(scanner_.begin(), rmsg::intrinsic_not_found) <<
+    name;
+  return false;
+}
+
 ParseTree *
 Parser::parse()
 {
@@ -2259,6 +2282,13 @@ Parser::parse()
         scanner_.eatRestOfLine();
         break;
 
+      case TOK_USING:
+        if (using_())
+          requireNewlineOrSemi();
+        else
+          scanner_.eatRestOfLine();
+        break;
+
       default:
         if (kind != TOK_UNKNOWN) {
           cc_.report(scanner_.begin(), rmsg::expected_global_decl)
@@ -2278,7 +2308,10 @@ Parser::parse()
   delegate_.OnLeaveParser();
 
  err_out:
-  return new (pool_) ParseTree(list);
+  ParseTree* pt = new (pool_) ParseTree(list);
+  if (uses_handle_intrinsics_)
+    pt->set_uses_handle_intrinsics();
+  return pt;
 }
 
 } // namespace sp

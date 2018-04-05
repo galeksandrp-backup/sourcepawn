@@ -1842,7 +1842,8 @@ class ParseTree : public PoolObject
 
  public:
   ParseTree(StatementList *statements)
-    : statements_(statements)
+    : statements_(statements),
+      uses_handle_intrinsics_(false)
   {
   }
 
@@ -1852,6 +1853,16 @@ class ParseTree : public PoolObject
   StatementList *statements() const {
     return statements_;
   }
+
+  bool uses_handle_intrinsics() const {
+    return uses_handle_intrinsics_;
+  }
+  void set_uses_handle_intrinsics() {
+    uses_handle_intrinsics_ = true;
+  }
+
+ private:
+  bool uses_handle_intrinsics_;
 };
 
 // For new AstVisitors, copy-paste.
