@@ -442,22 +442,25 @@ class StringLiteral : public Expression
 class NameAndValue : public PoolObject
 {
  public:
-  NameAndValue(const Token &name, Expression *expr)
+  NameAndValue(const NameToken& name, Expression* expr)
    : name_(name),
      expr_(expr)
   {
   }
 
-  Atom *name() const {
-    return name_.atom();
+  Atom* name() const {
+    return name_.atom;
   }
-  Expression *expr() const {
+  Expression* expr() const {
     return expr_;
+  }
+  const SourceLocation& loc() const {
+    return name_.start;
   }
 
  private:
-  Token name_;
-  Expression *expr_;
+  NameToken name_;
+  Expression* expr_;
 };
 
 typedef PoolList<NameAndValue *> NameAndValueList;
@@ -465,7 +468,7 @@ typedef PoolList<NameAndValue *> NameAndValueList;
 class StructInitializer : public Expression
 {
  public:
-  StructInitializer(const SourceLocation &loc, NameAndValueList *pairs)
+  StructInitializer(const SourceLocation& loc, NameAndValueList* pairs)
    : Expression(loc),
      pairs_(pairs)
   {
@@ -473,12 +476,12 @@ class StructInitializer : public Expression
 
   DECLARE_NODE(StructInitializer);
 
-  NameAndValueList *pairs() const {
+  NameAndValueList* pairs() const {
     return pairs_;
   }
 
  private:
-  NameAndValueList *pairs_;
+  NameAndValueList* pairs_;
 };
 
 class ArrayLiteral : public Expression
@@ -1487,6 +1490,7 @@ class FieldDecl : public LayoutDecl
   NameToken name_;
   TypeExpr te_;
   FieldSymbol *sym_;
+  Type* type_;
 };
 
 class MethodDecl : public LayoutDecl

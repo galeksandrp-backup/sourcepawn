@@ -584,7 +584,7 @@ Parser::parseStructInitializer(const SourceLocation &pos)
   while (!match(TOK_RBRACE)) {
     if (!expect(TOK_NAME))
       return nullptr;
-    const Token name = *scanner_.current();
+    NameToken name = *scanner_.current();
 
     if (!match(TOK_ASSIGN))
       return nullptr;

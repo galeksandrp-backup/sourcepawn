@@ -140,9 +140,9 @@ TypeManager::newTypeset(Atom* name)
 }
 
 StructType *
-TypeManager::newStruct(Atom* name)
+TypeManager::newStruct(ast::RecordDecl* decl)
 {
-  return StructType::New(name);
+  return StructType::New(decl);
 }
 
 TypedefType *

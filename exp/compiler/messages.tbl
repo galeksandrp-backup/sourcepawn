@@ -149,6 +149,12 @@ RMSG(illegal_lvalue,                type,              "expression must be an l-
 RMSG(lvalue_is_const,               type,              "l-value cannot be modified")
 RMSG(illegal_case,                  type,              "switch cases must be constant integer values")
 RMSG(illegal_64bit_case,            type,              "switch cases must be 32-bit values")
+RMSG(struct_init_needs_struct_type, type,              "cannot use a struct initializer with a non-struct type")
+RMSG(struct_init_appears_twice,     type,              "field '%0' has more than one initializer")
+RMSG(struct_init_needs_string_lit,  type,              "field '%0' can only be initialized with a string literal")
+RMSG(struct_init_needs_const_int,   type,              "field '%0' can only be initialized with a constant integer")
+RMSG(struct_unsupported_type,       type,              "field '%0' has unsupported type '%1'")
+RMSG(struct_field_not_found,        type,              "struct type '%0' has no field named '%1'")
 
 RMSG(too_many_cases,                impl,              "too many switch cases")
 RMSG(too_many_arguments,            impl,              "function takes too many arguments")

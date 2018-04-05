@@ -87,6 +87,7 @@ class SemanticAnalysis
                            Type* to,
                            Coercion context);
   sema::Expr* initializer(ast::Expression* expr, Type* type);
+  sema::Expr* struct_initializer(ast::StructInitializer* expr, Type* type);
 
   // No-op function to breakpoint on type errors.
   sema::Expr* no_conversion(sema::Expr* expr, Type* from, Type* to);

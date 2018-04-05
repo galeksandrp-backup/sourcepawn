@@ -29,6 +29,7 @@ namespace sp {
 struct ReportingContext;
 
 namespace ast {
+class RecordDecl;
 class TypeExpr;
 class TypeSpecifier;
 } // namespace ast
@@ -220,6 +221,11 @@ class Type : public PoolObject
   bool isNullType() {
     return canonical()->kind_ == Kind::NullType;
   }
+  bool isPrimitive(PrimitiveType type) {
+    return isPrimitive() && primitive() == type;
+  }
+
+  bool isString();
 
   // Return true if a value of this type can be stored in a variable.
   bool isStorableType() {
@@ -606,17 +612,18 @@ class FunctionType : public Type
 class RecordType : public Type
 {
  public:
-  explicit RecordType(Kind kind, Atom* name)
+  explicit RecordType(Kind kind, ast::RecordDecl* decl)
    : Type(kind),
-     name_(name)
+     decl_(decl)
   {}
 
-  Atom *name() const {
-    return name_;
+  Atom* name() const;
+  ast::RecordDecl* decl() const {
+    return decl_;
   }
 
  private:
-  Atom* name_;
+  ast::RecordDecl* decl_;
 };
 
 class TypesetType : public Type
@@ -654,12 +661,10 @@ class TypesetType : public Type
 
 class StructType : public RecordType
 {
-  StructType(Atom* name)
-   : RecordType(Kind::Struct, name)
-  {}
+  StructType(ast::RecordDecl* decl);
 
  public:
-  static StructType *New(Atom* name);
+  static StructType *New(ast::RecordDecl* decl);
 };
 
 class ReferenceType : public Type
@@ -679,6 +684,12 @@ public:
 private:
   Type* inner_;
 };
+
+inline bool
+Type::isString()
+{
+  return isArray() && toArray()->contained()->isPrimitive(PrimitiveType::Char);
+}
 
 // Types where "const" is allowed as a keyword.
 static inline bool

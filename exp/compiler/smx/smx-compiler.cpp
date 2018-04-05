@@ -961,7 +961,10 @@ void
 SmxCompiler::generateData(ast::VarDecl* decl)
 {
   VariableSymbol* sym = decl->sym();
-  assert(HasSimpleCellStorage(sym->type()));
+  if (sym->type()->isStruct()) {
+    generateLegacyStructData(decl);
+    return;
+  }
 
   int32_t address = int32_t(data_.pos());
   sym->allocate(StorageClass::Global, address);
@@ -989,20 +992,78 @@ SmxCompiler::generateData(ast::VarDecl* decl)
   }
 }
 
+void
+SmxCompiler::generateLegacyStructData(ast::VarDecl* stmt)
+{
+  VariableSymbol* sym = stmt->sym();
+  StructType* st = sym->type()->asStruct();
+  ast::RecordDecl* decl = st->decl();
+  ast::LayoutDecls* body = decl->body();
+
+  sema::StructInitExpr* init = stmt->sema_init()
+                               ? stmt->sema_init()->toStructInitExpr()
+                               : nullptr;
+
+  Vector<int32_t> values;
+
+  size_t field_index = 0;
+  for (ast::LayoutDecl* decl : *body) {
+    ast::FieldDecl* field = decl->asFieldDecl();
+    if (!field)
+      continue;
+
+    sema::Expr* expr = nullptr;
+    if (init)
+      expr = init->exprs()->at(field_index);
+
+    FieldSymbol* sym = field->sym();
+    int32_t value;
+    if (sym->type()->isString()) {
+      if (expr) {
+        Atom* atom = expr->toStringExpr()->literal();
+        value = generateDataString(atom->chars(), atom->length());
+       } else {
+        value = generateDataString("", 0);
+       }
+    } else {
+      if (expr)
+        value = expr->toConstValueExpr()->value().toInteger().asSigned();
+      else
+        value = 0;
+    }
+
+    values.append(value);
+    field_index++;
+  }
+
+  int32_t address = int32_t(data_.pos());
+  sym->allocate(StorageClass::Global, address);
+
+  for (int32_t value : values)
+    data_.write<cell_t>(value);
+}
+
 ValueDest
 SmxCompiler::emitString(sema::StringExpr* expr, ValueDest dest)
 {
   Atom* literal = expr->literal();
-  const char* raw = literal->chars();
 
   // The array size should be bytes + 1, for the null terminator.
   assert(expr->type()->toArray()->fixedLength() == literal->length() + 1);
 
-  // Allocations must be in increments of cells.
-  size_t leftover = Align(literal->length() + 1, sizeof(cell_t)) - (literal->length() + 1);
-  assert(leftover < sizeof(cell_t));
+  int32_t address = generateDataString(literal->chars(), literal->length());
+  emit_const(dest, address);
+  return dest;
+}
 
+int32_t
+SmxCompiler::generateDataString(const char* str, size_t length)
+{
   int32_t address = int32_t(data_.pos());
+
+  // Allocations must be in increments of cells.
+  size_t leftover = Align(length + 1, sizeof(cell_t)) - (length + 1);
+  assert(leftover < sizeof(cell_t));
 
   // Write the string, make sure we're still aligned after. Note we don't do
   // string coalescing (yet), it would work for general cases but not this:
@@ -1012,14 +1073,13 @@ SmxCompiler::emitString(sema::StringExpr* expr, ValueDest dest)
   // In this case we need to guarantee a new literal copy each time the
   // default argument is used. We should be able to mark the StringExpr
   // as coalescable and fix this in the future.
-  data_.write(raw, literal->length() + 1);
+  data_.write(str, length);
+  data_.write<uint8_t>(0);
   for (size_t i = 0; i < leftover; i++)
     data_.write<uint8_t>(0);
   assert(ke::IsAligned(data_.size(), sizeof(cell_t)));
 
-  // Finally we can push the value.
-  emit_const(dest, address);
-  return dest;
+  return address;
 }
 
 #if 0

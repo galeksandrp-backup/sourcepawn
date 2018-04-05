@@ -173,10 +173,21 @@ TypesetType::New(Atom* name)
   return new (POOL()) TypesetType(name);
 }
 
-StructType *
-StructType::New(Atom* name)
+StructType::StructType(ast::RecordDecl* decl)
+ : RecordType(Kind::Struct, decl)
 {
-  return new (POOL()) StructType(name);
+}
+
+Atom*
+RecordType::name() const
+{
+  return decl_->name();
+}
+
+StructType *
+StructType::New(ast::RecordDecl* decl)
+{
+  return new (POOL()) StructType(decl);
 }
 
 ReferenceType*

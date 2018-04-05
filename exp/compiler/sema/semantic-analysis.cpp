@@ -19,6 +19,7 @@
 #include "semantic-analysis.h"
 #include "scopes.h"
 #include "symbols.h"
+#include <amtl/am-linkedlist.h>
 
 namespace sp {
 
@@ -69,6 +70,9 @@ SemanticAnalysis::walkAST()
         visitVarDecl(decl);
         break;
       }
+      case AstKind::kRecordDecl:
+        // Type declarations don't have semantic checks.
+        continue;
       default:
         cc_.report(stmt->loc(), rmsg::unimpl_kind) <<
           "sema-ast-walk" << stmt->kindName();
@@ -691,12 +695,109 @@ SemanticAnalysis::visitLValue(ast::Expression* node)
 sema::Expr*
 SemanticAnalysis::initializer(ast::Expression* node, Type* type)
 {
+  if (StructInitializer* init = node->asStructInitializer())
+    return struct_initializer(init, type);
+
   sema::Expr* expr = visitExpression(node);
   if (!expr)
     return nullptr;
 
   // :TODO: check overflow integers
   return coerce(expr, type, Coercion::Assignment);
+}
+
+sema::Expr*
+SemanticAnalysis::struct_initializer(ast::StructInitializer* expr, Type* type)
+{
+  if (!type->isStruct()) {
+    cc_.report(expr->loc(), rmsg::struct_init_needs_struct_type);
+    return nullptr;
+  }
+
+  LinkedList<NameAndValue*> entries;
+  for (NameAndValue* item : *expr->pairs())
+    entries.append(item);
+
+  StructType* st = type->asStruct();
+  ast::RecordDecl* decl = st->decl();
+  ast::LayoutDecls* body = decl->body();
+
+  PoolList<sema::Expr*>* out = new (pool_) PoolList<sema::Expr*>();
+
+  size_t nfields = 0;
+  for (ast::LayoutDecl* decl : *body) {
+    FieldDecl* field = decl->asFieldDecl();
+    if (!field)
+      continue;
+
+    nfields++;
+
+    FieldSymbol* sym = field->sym();
+    NameAndValue* assignment = nullptr;
+
+    /* Find a matching assignment. */
+    auto iter = entries.begin();
+    while (iter != entries.end()) {
+      NameAndValue* nv = (*iter);
+      if (nv->name() == sym->name()) {
+        if (assignment) {
+          cc_.report(nv->expr()->loc(), rmsg::struct_init_appears_twice) <<
+            nv->name();
+        }
+
+        assignment = nv;
+        iter = entries.erase(iter);
+      } else {
+        iter++;
+      }
+    }
+
+    // The backend must generate a default initializer.
+    if (!assignment) {
+      out->append(nullptr);
+      continue;
+    }
+
+    // We only support two types here: int, and string.
+    sema::Expr* value = visitExpression(assignment->expr());
+    if (!value)
+      continue;
+
+    if (sym->type()->isString()) {
+      sema::StringExpr* str = value->asStringExpr();
+      if (!str) {
+        cc_.report(value->src()->loc(), rmsg::struct_init_needs_string_lit) <<
+          sym->name();
+        continue;
+      }
+    } else if (sym->type()->isPrimitive(PrimitiveType::Int32)) {
+      sema::ConstValueExpr* cv = value->asConstValueExpr();
+      if (!cv ||
+          !cv->value().isInteger() ||
+          !cv->value().toInteger().valueFitsInInt32())
+      {
+        cc_.report(value->src()->loc(), rmsg::struct_init_needs_string_lit) <<
+          sym->name();
+        continue;
+      }
+    } else {
+      cc_.report(decl->loc(), rmsg::struct_unsupported_type) <<
+        sym->name() << sym->type();
+      continue;
+    }
+
+    out->append(value);
+  }
+
+  for (NameAndValue* nv : entries) {
+    cc_.report(nv->loc(), rmsg::struct_field_not_found) <<
+      st->name() << nv->name();
+  }
+
+  if (out->length() != nfields)
+    return nullptr;
+
+  return new (pool_) sema::StructInitExpr(expr, st, out);
 }
 
 sema::Expr*

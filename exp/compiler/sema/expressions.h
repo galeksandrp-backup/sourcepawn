@@ -43,6 +43,7 @@ namespace sema {
   _(TrivialCast)          \
   _(String)               \
   _(IncDec)               \
+  _(StructInit)           \
   /* terminator */
 
 // Forward declarations.
@@ -336,6 +337,29 @@ class StringExpr final : public Expr
 
  private:
   Atom* literal_;
+};
+
+class StructInitExpr final : public Expr
+{
+ public:
+  explicit StructInitExpr(ast::Expression* node,
+                          Type* type,
+                          ExprList* exprs)
+   : Expr(node, type),
+     exprs_(exprs)
+  {}
+
+  DECLARE_SEMA(StructInit)
+
+  bool isConstant() const override {
+    return true;
+  }
+  ExprList* exprs() const {
+    return exprs_;
+  }
+
+ private:
+  ExprList* exprs_;
 };
 
 #undef DECLARE_SEMA

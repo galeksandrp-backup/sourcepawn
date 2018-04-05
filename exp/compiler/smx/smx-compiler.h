@@ -55,6 +55,8 @@ private:
 
   // Allocate space and generate data for a global variable.
   void generateData(ast::VarDecl* stmt);
+  void generateLegacyStructData(ast::VarDecl* stmt);
+  int32_t generateDataString(const char* str, size_t length);
 
   // Emit an expression into the given destination, returning false on failure.
   bool emit_into(sema::Expr* expr, ValueDest dest);
