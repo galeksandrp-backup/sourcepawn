@@ -1067,6 +1067,7 @@ class FunctionNode : public PoolObject
      body_(nullptr),
      signature_(nullptr),
      funScope_(nullptr),
+     signature_type_(nullptr),
      guaranteed_return_(false)
   {
   }
