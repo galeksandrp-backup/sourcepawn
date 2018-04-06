@@ -357,7 +357,7 @@ SmxCompiler::generateVarDecl(ast::VarDecl* stmt)
 
     store_into(sym, init);
   } else {
-    assert(false);
+    // assert(false);
     // :TODO: store 0
   }
 }

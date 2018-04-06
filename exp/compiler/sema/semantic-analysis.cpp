@@ -278,6 +278,8 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitStringLiteral(node->toStringLiteral());
     case AstKind::kIncDecExpression:
       return visitIncDec(node->toIncDecExpression());
+    case AstKind::kIndexExpression:
+      return visitIndex(node->toIndexExpression());
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-expr" << node->kindName();
@@ -308,7 +310,8 @@ SemanticAnalysis::visitVarDecl(VarDecl* node)
     node->set_sema_init(init);
   } else {
     // Initialize to 0!
-    assert(false);
+    // assert(false);
+    // :TODO:
   }
 
   if (sym->scope()->kind() == Scope::Global)
@@ -643,6 +646,38 @@ SemanticAnalysis::visitUnaryExpression(ast::UnaryExpression* node)
   }
 
   return new (pool_) sema::UnaryExpr(node, type, node->token(), expr);
+}
+
+sema::Expr*
+SemanticAnalysis::visitIndex(ast::IndexExpression* node)
+{
+  sema::Expr* base = visitExpression(node->left());
+  if (!base)
+    return nullptr;
+
+  sema::Expr* index = visitExpression(node->right());
+  if (!index)
+    return nullptr;
+
+  if (!base->type()->isArray()) {
+    cc_.report(base->src()->loc(), rmsg::cannot_index_type) <<
+      base->type();
+    return nullptr;
+  }
+  if (!index->type()->isPrimitive(PrimitiveType::Int32)) {
+    cc_.report(index->src()->loc(), rmsg::index_must_be_integer);
+    return nullptr;
+  }
+
+  int32_t value;
+  if (index->getConstantInt32(&value) && value < 0) {
+    cc_.report(index->src()->loc(), rmsg::index_must_be_positive);
+    return nullptr;
+  }
+
+  // :TODO: figure out const...
+  ArrayType* array = base->type()->toArray();
+  return new (pool_) sema::IndexExpr(node, array->contained(), base, index);
 }
 
 sema::Expr*

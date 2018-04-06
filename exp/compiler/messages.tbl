@@ -156,6 +156,9 @@ RMSG(struct_init_needs_string_lit,  type,              "field '%0' can only be i
 RMSG(struct_init_needs_const_int,   type,              "field '%0' can only be initialized with a constant integer")
 RMSG(struct_unsupported_type,       type,              "field '%0' has unsupported type '%1'")
 RMSG(struct_field_not_found,        type,              "struct type '%0' has no field named '%1'")
+RMSG(cannot_index_type,             type,              "type '%0' does not have an index operator (did you want an array?)")
+RMSG(index_must_be_integer,         type,              "array index must be an integer")
+RMSG(index_must_be_positive,        type,              "array index cannot be negative")
 
 RMSG(too_many_cases,                impl,              "too many switch cases")
 RMSG(too_many_arguments,            impl,              "function takes too many arguments")

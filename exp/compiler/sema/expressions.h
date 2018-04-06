@@ -44,6 +44,7 @@ namespace sema {
   _(String)               \
   _(IncDec)               \
   _(StructInit)           \
+  _(Index)                \
   /* terminator */
 
 // Forward declarations.
@@ -80,6 +81,9 @@ public:
     return false;
   }
   virtual bool getBoxedValue(BoxedValue* out) const {
+    return false;
+  }
+  virtual bool getConstantInt32(int32_t* value) const {
     return false;
   }
 
@@ -133,6 +137,14 @@ public:
   }
   bool getBoxedValue(BoxedValue* out) const override {
     *out = value_;
+    return true;
+  }
+  bool getConstantInt32(int32_t* value) const override {
+    if (!value_.isInteger())
+      return false;
+    if (!value_.toInteger().valueFitsInInt32())
+      return false;
+    *value = value_.toInteger().asSigned();
     return true;
   }
 
@@ -360,6 +372,32 @@ class StructInitExpr final : public Expr
 
  private:
   ExprList* exprs_;
+};
+
+class IndexExpr final : public Expr
+{
+ public:
+  explicit IndexExpr(ast::Expression* node,
+                      Type* type,
+                      Expr* base,
+                      Expr* index)
+   : Expr(node, type),
+     base_(base),
+     index_(index)
+  {}
+
+  DECLARE_SEMA(Index)
+
+  Expr* base() const {
+    return base_;
+  }
+  Expr* index() const {
+    return index_;
+  }
+
+ private:
+  Expr* base_;
+  Expr* index_;
 };
 
 #undef DECLARE_SEMA

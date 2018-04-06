@@ -61,6 +61,7 @@ class SemanticAnalysis
   sema::Expr* visitUnaryExpression(ast::UnaryExpression* node);
   sema::Expr* visitStringLiteral(ast::StringLiteral* node);
   sema::Expr* visitIncDec(ast::IncDecExpression* node);
+  sema::Expr* visitIndex(ast::IndexExpression* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);

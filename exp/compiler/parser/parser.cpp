@@ -1816,8 +1816,10 @@ Parser::statement()
       kind == TOK_STATIC ||
       kind == TOK_CONST)
   {
-    if (IsNewTypeToken(kind))
+    if (IsNewTypeToken(kind)) {
       scanner_.undo();
+      kind = TOK_NEW;
+    }
     return localVarDecl(kind);
   }
 
