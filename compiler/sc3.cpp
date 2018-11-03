@@ -1538,7 +1538,6 @@ SC3ExpressionParser::hier2(value *lval)
       // Warn: old style cast used when newdecls pragma is enabled
       error(240, st, type_to_name(tag));
     }
-    lval->cmptag=tag;
     lvalue=hier2(lval);
     Type* ltype = gTypes.find(lval->tag);
     Type* atype = gTypes.find(tag);
@@ -1791,7 +1790,6 @@ SC3ExpressionParser::parse_view_as(value* lval)
 
   int paren = needtoken('(');
 
-  lval->cmptag = tag;
   int lvalue = hier14(lval);
   if (paren)
     needtoken(')');
@@ -1885,7 +1883,6 @@ restart:
         return FALSE;
       } /* if */
       /* set the tag to match (enumeration fields as indices) */
-      lval2.cmptag=sym->x.tags.index;
       stgget(&index,&cidx);     /* mark position in code generator */
       pushreg(sPRI);            /* save base address of the array */
       if (hier14(&lval2))       /* create expression for the array index */
@@ -2210,7 +2207,7 @@ SC3ExpressionParser::primary(value *lval)
     assert(strlen(st)<sizeof lastsymbol);
     strcpy(lastsymbol,st);
   }
-  if (tok==tSYMBOL && !findconst(st,NULL)) {
+  if (tok==tSYMBOL && !findconst(st)) {
     /* first look for a local variable */
     if ((sym=findloc(st))!=0) {
       if (sym->ident==iLABEL) {
@@ -2288,7 +2285,6 @@ static void clear_value(value *lval)
   lval->boolresult=FALSE;
   lval->accessor=NULL;
   /* do not clear lval->arrayidx, it is preset in hier14() */
-  /* do not clear lval->cmptag */
 }
 
 static void setdefarray(cell *string,cell size,cell array_sz,cell *dataaddr,int fconst)
@@ -2630,8 +2626,6 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
          */
       } else {
         arglist[argpos]=ARG_DONE; /* flag argument as "present" */
-        if (arg[argidx].ident!=0)     /* set the expected tag, if any */
-          lval.cmptag=arg[argidx].tag;
         if (args.handling_this()) {
           lval = args.thisv().val;
           lvalue = args.thisv().lvalue;
@@ -3007,12 +3001,9 @@ static int constant(value *lval)
   cell val,item,cidx;
   char *st;
   symbol *sym;
-  int cmptag=lval->cmptag;
 
   tok=lex(&val,&st);
-  if (tok==tSYMBOL && (sym=findconst(st,&cmptag))!=0) {
-    if (cmptag>1)
-      error(91,sym->name());  /* ambiguity: multiple matching constants (different tags) */
+  if (tok==tSYMBOL && (sym=findconst(st))!=0) {
     lval->constval=sym->addr();
     ldconst(lval->constval,sPRI);
     lval->ident=iCONSTEXPR;

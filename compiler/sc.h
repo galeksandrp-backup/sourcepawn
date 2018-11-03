@@ -283,7 +283,6 @@ struct value {
   cell constval;        /* value of the constant expression (if ident==iCONSTEXPR)
                          * also used for the size of a literal array */
   int tag;              /* tag (of the expression) */
-  int cmptag;           /* for searching symbols: choose the one with the matching tag */
   char ident;           /* iCONSTEXPR, iVARIABLE, iARRAY, iARRAYCELL,
                          * iEXPRESSION or iREFERENCE */
   char boolresult;      /* boolean result for relational operators */
@@ -692,7 +691,7 @@ int refer_symbol(symbol *entry,symbol *bywhom);
 void markusage(symbol *sym,int usage);
 symbol *findglb(const char *name);
 symbol *findloc(const char *name);
-symbol *findconst(const char *name,int *matchtag);
+symbol *findconst(const char *name);
 symbol *finddepend(const symbol *parent);
 symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag, int usage);
 symbol *addvariable(const char *name,cell addr,int ident,int vclass,int tag,

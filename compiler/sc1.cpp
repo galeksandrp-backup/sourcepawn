@@ -1579,7 +1579,7 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
       assert(!fstatic);
     }
     slength = fix_char_size(decl);
-    sym=findconst(decl->name,NULL);
+    sym=findconst(decl->name);
     if (sym==NULL) {
       sym=findglb(decl->name);
     } /* if */
@@ -2398,13 +2398,13 @@ static cell initvector(int ident,int tag,cell size,int fillzero,
       if (enumfield!=NULL) {
         cell step;
         int cmptag=enumfield->index;
-        symbol *symfield=findconst(enumfield->name,&cmptag);
-        if (cmptag>1) {
+        symbol *symfield=findconst(enumfield->name);
+        assert(symfield);
+        if (symfield->tag!=cmptag) {
           error(91,enumfield->name); /* ambiguous constant, needs tag override */
           if (errorfound!=NULL)
             *errorfound=TRUE;
         }
-        assert(symfield!=NULL);
         assert(fieldlit<litidx);
         if (litidx-fieldlit>symfield->dim.array.length) {
           error(228);           /* length of initializer exceeds size of the enum field */
@@ -5256,7 +5256,7 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
       if (type==NULL) {
         redef=1;                /* new constant does not have a tag */
       } else {
-        tagsym=findconst(type->name(),NULL);
+        tagsym=findconst(type->name());
         if (tagsym==NULL || (tagsym->usage & uENUMROOT)==0)
           redef=1;              /* new constant is not an enumeration field */
       } /* if */
