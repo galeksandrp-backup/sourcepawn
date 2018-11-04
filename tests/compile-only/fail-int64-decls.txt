@@ -1,0 +1,8 @@
+(1) : error 011: type "int64" cannot be used with global variables
+(2) : error 011: type "int64" cannot be used with return values
+(3) : error 011: type "int64" cannot be used with arguments
+(8) : error 011: type "int64" cannot be used with return values
+(15) : error 011: type "int64" cannot be used with arrays
+(16) : error 011: type "int64" cannot be used with arrays
+(17) : error 011: type "int64" cannot be used with static
+(20) : error 011: type "int64" cannot be used with view_as<>
