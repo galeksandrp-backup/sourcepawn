@@ -1154,12 +1154,23 @@ RttiBuilder::encode_signature(symbol* sym)
   }
 
   for (arginfo* arg = &sym->function()->args[0]; arg->ident; arg++) {
+    int tag = arg->tag;
+    int numdim = arg->numdim;
+    if (arg->numdim && arg->idxtag[numdim - 1]) {
+      int last_tag = arg->idxtag[numdim - 1];
+      Type* last_type = gTypes.find(last_tag);
+      if (last_type->isEnumStruct()) {
+        tag = last_tag;
+        numdim--;
+      }
+    }
+
     if (arg->ident == iREFERENCE)
       bytes.append(cb::kByRef);
     variable_type_t info = {
-      arg->tag,
+      tag,
       arg->dim,
-      arg->numdim,
+      numdim,
       (arg->usage & uCONST) == uCONST
     };
     encode_var_type(bytes, info);
