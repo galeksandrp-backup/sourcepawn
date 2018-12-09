@@ -2387,6 +2387,11 @@ static cell initvector(int ident,int tag,cell size,int fillzero,
         cell step;
         int cmptag=enumfield->index;
         symbol *symfield=findconst(enumfield->name);
+        if (!symfield) {
+          Type* type = gTypes.find(enumfield->index);
+          if (symbol* enum_type = type->asEnumStruct())
+            symfield = find_enumstruct_field(type, enumfield->name);
+        }
         assert(symfield);
         if (symfield->tag!=cmptag) {
           error(91,enumfield->name); /* ambiguous constant, needs tag override */

@@ -1748,27 +1748,30 @@ enumstruct_field_expr(value* lval, symbol** cursym, symbol* dummy)
   }
   lval->tag = field->x.tags.index;
 
-  // This is a subarray, and it needs to be indexed. As a huge hack we rewrite
-  // the symbol to look like an array, as did the old enum struct code. The peek
-  // here is critical since otherwise we'll exit hier1() with an iREFARRAY
-  // instead of an iARRAYCELL.
+  // As a huge hack, we rewrite the current symbol within hier1() to look like
+  // a subfield of the array. This allows all the internal machinery that looks
+  // at symbol properties to continue working.
+  new (dummy) symbol(*var);
+  if (gTypes.find(lval->tag)->isEnumStruct()) {
+    dummy->x.tags.index = field->x.tags.index;
+  } else {
+    dummy->tag = lval->tag;
+    dummy->x.tags.index = 0;
+  }
+
+  // If the next operation will be an index operation, then make the symbol
+  // look like an iREFARRAY. The peek is critical since we otherwise want to
+  // resolve to an iARRAYCELL/CHAR.
   if (field->dim.array.length > 0 && (lexpeek('[') || lexpeek('.'))) {
-    new (dummy) symbol(*var);
-    if (gTypes.find(lval->tag)->isEnumStruct()) {
-      dummy->x.tags.index = field->x.tags.index;
-    } else {
-      dummy->tag = lval->tag;
-      dummy->x.tags.index = 0;
-    }
     dummy->dim.array.length = field->dim.array.length;
     dummy->dim.array.slength = field->dim.array.slength;
     lval->ident = iREFARRAY;
     lval->constval = field->dim.array.length;
-    *cursym = dummy;
   } else {
     lval->ident = (lval->tag == pc_tag_string) ? iARRAYCHAR : iARRAYCELL;
     lval->constval = 0;
   }
+  *cursym = dummy;
   return true;
 }
 
