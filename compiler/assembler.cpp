@@ -930,7 +930,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
   }
 
   // Rewrite enum structs to look less like arrays.
-  if (symbol* enum_type = gTypes.find(last_tag)->asEnumStruct()) {
+  if (gTypes.find(last_tag)->asEnumStruct()) {
     assert(dimcount > 0);
     dimcount--;
     tag = last_tag;
