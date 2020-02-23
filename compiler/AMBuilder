@@ -41,6 +41,7 @@ elif builder.target.platform == 'mac':
 
 binary.sources += [
   'assembler.cpp',
+  'array-helpers.cpp',
   'code-generator.cpp',
   'emitter.cpp',
   'errors.cpp',

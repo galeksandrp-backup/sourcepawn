@@ -127,6 +127,9 @@ funcenum_for_symbol(symbol* sym)
         dest.ident = arg.ident;
         dest.fconst = arg.is_const;
 
+        if (dest.ident != iARRAY && dest.ident != iREFARRAY)
+          assert(dest.dimcount == 0);
+
         ft->args.append(dest);
     }
 

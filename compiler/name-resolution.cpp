@@ -20,8 +20,10 @@
 //
 //  Version: $Id$
 
+#include "array-helpers.h"
 #include "errors.h"
 #include "expressions.h"
+#include "new-parser.h"
 #include "parse-node.h"
 #include "sc.h"
 #include "sclist.h"
@@ -209,17 +211,51 @@ ConstDecl::Bind()
 bool
 VarDecl::Bind()
 {
+    if (type_.ident == iARRAY)
+        ResolveArraySize(this);
+
+    if (type_.tag == pc_tag_void)
+        error(pos_, 144);
+
     // :TODO: introduce find-by-atom to improve compiler speed
-    sym_ = findconst(name_->chars());
-    if (!sym_)
-        sym_ = findglb(name_->chars());
+    bool should_define = false;
+    if (vclass_ == sGLOBAL) {
+        sym_ = findconst(name_->chars());
+        if (!sym_)
+            sym_ = findglb(name_->chars());
 
-    bool should_define = !!sym_;
+        // This will go away when we remove the two-pass system.
+        if (sym_ && sym_->defined) {
+            error(pos_, 21, name_->chars());
+            return false;
+        }
 
-    // This will go away when we remove the two-pass system.
-    if (sym_ && sym_->defined) {
-        error(pos_, 21, name_->chars());
-        return false;
+        if (type_.ident == iREFARRAY) {
+            // Dynamic array in global scope.
+            assert(type_.is_new);
+            error(pos_, 162);
+        }
+
+        should_define = !!sym_;
+    }
+
+    if (vclass_ != sGLOBAL) {
+        // Note: block locals may be named identical to locals at higher
+        // compound blocks (as with standard C); so we must check (and add)
+        // the "nesting level" of local variables to verify the
+        // multi-definition of symbols.
+        symbol* sym = findloc(name_->chars());
+        if (sym && sym->compound == current_nestlevel())
+            error(pos_, 21, name_->chars());
+
+        // Although valid, a local variable whose name is equal to that
+        // of a global variable or to that of a local variable at a lower
+        // level might indicate a bug.
+        if (is_shadowed_name(name_->chars()))
+            error(pos_, 219, name_->chars());
+
+        if (vclass_ == sSTATIC && type_.ident == iREFARRAY)
+            error(pos_, 165);
     }
 
     if (gTypes.find(type_.tag)->kind() == TypeKind::Struct) {
@@ -229,13 +265,36 @@ VarDecl::Bind()
             assert(sym_->is_struct);
         sym_->is_struct = true;
         sym_->stock = is_stock_;
-        sym_->is_public = is_public_;
         sym_->is_const = true;
     } else {
-        assert(false);
+        if (!sym_) {
+            sym_ = addvariable(name_->chars(), 0, type_.ident, vclass_, type_.tag, type_.dim,
+                               type_.numdim, type_.idxtag);
+        }
+        sym_->is_const = type_.is_const;
+        sym_->stock = is_stock_;
     }
 
-    sym_->defined = should_define;
+    if (vclass_ == sGLOBAL)
+        sym_->defined = should_define;
+
+    if (is_public_) {
+        sym_->is_public = true;
+        sym_->usage |= uREAD;
+    }
+
+    // Note: fnumber implies static scoping for symbol lookup, so until that's
+    // fixed we only set it for globals.
+    if (vclass_ == sGLOBAL && is_static_)
+        sym_->fnumber = pos_.file;
+
+    if (vclass_ != sGLOBAL)
+        sym_->compound = current_nestlevel();
+
+    // Note: the LHS bind should always succeed, since we just added the
+    // variable.
+    if (init_ && !init_->Bind())
+        return false;
     return true;
 }
 
@@ -380,5 +439,17 @@ ChainedCompareExpr::Bind()
     bool ok = first_->Bind();
     for (const auto& op : ops_)
         ok &= op.expr->Bind();
+    return ok;
+}
+
+bool
+NewArrayExpr::Bind()
+{
+    if (already_analyzed_)
+        return true;
+
+    bool ok = true;
+    for (const auto& expr : exprs_)
+        ok &= expr->Bind();
     return ok;
 }

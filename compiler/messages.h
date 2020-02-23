@@ -22,7 +22,7 @@
  */
 
 // To find unused errors, try this:
-//   for i in {1..182}; do echo -n "Error $i:" ; grep -E "\($i(,|\))" compiler/sc*.cpp | wc -l; done
+//   for i in {1..199}; do echo -n "Error $i:" ; grep -E "error\(($i|[^0-9]+$i)(,|\))" compiler/*.cpp | grep error | wc -l; done
 
 static const char* errmsg[] = {
     /*001*/ "expected token: \"%s\", but found \"%s\"\n",
@@ -43,7 +43,7 @@ static const char* errmsg[] = {
     /*016*/ "multiple defaults in \"switch\"\n",
     /*017*/ "undefined symbol \"%s\"\n",
     /*018*/ "initialization data exceeds declared size\n",
-    /*019*/ "not a label: \"%s\"\n",
+    /*019*/ "expected initializer with %d dimension(s), got %d\n",
     /*020*/ "invalid symbol name \"%s\"\n",
     /*021*/ "symbol already defined: \"%s\"\n",
     /*022*/ "must be lvalue (non-constant)\n",
@@ -76,7 +76,7 @@ static const char* errmsg[] = {
     /*049*/ "invalid line continuation\n",
     /*050*/ "constant '%s' already defined\n",
     /*051*/ "overloaded operator '%s' does not return bool\n",
-    /*052*/ "multi-dimensional arrays must be fully initialized\n",
+    /*052*/ "unused52\n",
     /*053*/ "exceeding maximum number of dimensions\n",
     /*054*/ "unmatched closing brace (\"}\")\n",
     /*055*/ "start of function body without function header\n",
@@ -92,9 +92,9 @@ static const char* errmsg[] = {
     /*065*/ "enum struct fields cannot have more than one dimension\n",
     /*066*/ "function argument may not be a reference argument or an array (argument \"%s\")\n",
     /*067*/ "variable cannot be both a reference and an array (variable \"%s\")\n",
-    /*068*/ "length of initializer exceeds size of the enum field\n",
+    /*068*/ "unused68\n",
     /*069*/ "arrays in info structs must be unsized and single dimension\n",
-    /*070*/ "unused\n",
+    /*070*/ "cannot automatically increment values of type '%s'\n",
     /*071*/ "user-defined operator must be declared before use (function \"%s\")\n",
     /*072*/ "\"sizeof\" operator is only valid on variables\n",
     /*073*/ "function argument must be an array (argument \"%s\")\n",
@@ -104,7 +104,7 @@ static const char* errmsg[] = {
     /*077*/ "arrays cannot be indexed by non-integral type '%s'\n",
     /*078*/ "function uses both \"return\" and \"return <value>\"\n",
     /*079*/ "inconsistent return types (array & non-array)\n",
-    /*080*/ "unknown symbol, or not a constant symbol (symbol \"%s\")\n",
+    /*080*/ "array size exceeds memory capacity\n",
     /*081*/ "enum struct field arrays must have fixed sizes\n",
     /*082*/ "properties cannot be arrays\n",
     /*083*/ "methodmap methods cannot return arrays\n",
@@ -115,17 +115,17 @@ static const char* errmsg[] = {
     /*088*/ "cannot return a value from a void function\n",
     /*089*/ "casting a void function is illegal\n",
     /*090*/ "public functions may not return arrays (symbol \"%s\")\n",
-    /*091*/ "ambiguous constant; tag override is required (symbol \"%s\")\n",
+    /*091*/ "unused91\n",
     /*092*/ "number of arguments does not match definition\n",
-    /*093*/ "unused93\n",
+    /*093*/ "dynamic array sizes must be specified with a constructor using \"new\"\n",
     /*094*/ "cannot apply const qualifier to enum struct field \"%s\"\n",
     /*095*/ "type \"%s\" cannot be applied as a tag\n",
     /*096*/ "could not find member \"%s\" in struct \"%s\"\n",
-    /*097*/ "symbol \"%s\" does not have a matching type\n",
+    /*097*/ "unused97\n",
     /*098*/ "type \"%s\" should be \"%s\" in new-style declarations\n",
     /*099*/ "%s should not have an explicit return type\n",
     /*100*/ "function prototypes do not match\n",
-    /*101*/ "specify either all dimensions or only the last dimension\n",
+    /*101*/ "unused101\n",
     /*102*/ "cannot find %s %s\n",
     /*103*/ "%s was already defined on this %s\n",
     /*104*/ "cannot find any methods for %s\n",
@@ -158,7 +158,7 @@ static const char* errmsg[] = {
     /*131*/ "cannot coerce object type %s to non-object type %s\n",
     /*132*/ "cannot coerce non-object type %s to object type %s\n",
     /*133*/ "cannot coerce unrelated object types %s and %s\n",
-    /*134*/ "type mismatch (%s and %s)\n",
+    /*134*/ "type mismatch (expected \"%s\", got \"%s\")\n",
     /*135*/ "cannot use enum struct type \"%s\" in natives\n",
     /*136*/ "reference is redundant, enum struct types are array-like\n",
     /*137*/ "cannot mix reference and array types\n",
@@ -192,9 +192,8 @@ static const char* errmsg[] = {
     /*161*/
     "brackets after variable name indicate a fixed-size array, but a dynamic size was given - did "
     "you mean to use 'new %s[size]' syntax?\n",
-    /*162*/
-    "cannot create dynamic arrays in global scope - did you mean to create a fixed-length array "
-    "with brackets after the variable name?\n",
+    /*162*/ "cannot create dynamic arrays in global scope - did you mean to "
+	    "create a fixed-length array?\n",
     /*163*/ "indeterminate array size in \"sizeof\" expression (symbol \"%s\")\n",
     /*164*/ "allocated array type '%s' doesn't match original type '%s'\n",
     /*165*/
@@ -219,29 +218,33 @@ static const char* errmsg[] = {
     /*180*/ "function return type differs from prototype. expected '%s', but got '%s'\n",
     /*181*/ "function argument named '%s' differs from prototype\n",
     /*182*/ "functions that return arrays cannot be used as callbacks\n",
+    /*183*/ "brackets after variable name indicates a fixed-size array, but "
+	    "size is missing or not constant\n",
+    /*184*/ "implicit dynamic array has a dimension of unspecified size\n",
+    /*185*/ "invalid default array initializer\n",
 };
 
 static const char* fatalmsg[] = {
-    /*183*/ "cannot read from file: \"%s\"\n",
-    /*184*/ "cannot write to file: \"%s\"\n",
-    /*185*/ "table overflow: \"%s\"\n",
+    /*300*/ "cannot read from file: \"%s\"\n",
+    /*301*/ "cannot write to file: \"%s\"\n",
+    /*302*/ "table overflow: \"%s\"\n",
     /* table can be: loop table
            *               literal table
            *               staging buffer
            *               option table (response file)
            *               peephole optimizer table
            */
-    /*186*/ "insufficient memory\n",
-    /*187*/ "invalid assembler instruction \"%s\"\n",
-    /*188*/ "numeric overflow, exceeding capacity\n",
-    /*189*/ "compiled script exceeds the maximum memory size (%ld bytes)\n",
-    /*190*/ "too many error messages on one line\n",
-    /*191*/ "codepage mapping file not found\n",
-    /*192*/ "invalid path: \"%s\"\n",
-    /*193*/ "assertion failed: %s\n",
-    /*194*/ "user error: %s\n",
-    /*195*/ "compiler bug: calling stock \"%s\" that has no generated code\n",
-    /*196*/
+    /*303*/ "insufficient memory\n",
+    /*304*/ "invalid assembler instruction \"%s\"\n",
+    /*305*/ "numeric overflow, exceeding capacity\n",
+    /*306*/ "compiled script exceeds the maximum memory size (%ld bytes)\n",
+    /*307*/ "too many error messages on one line\n",
+    /*308*/ "codepage mapping file not found\n",
+    /*309*/ "invalid path: \"%s\"\n",
+    /*310*/ "assertion failed: %s\n",
+    /*311*/ "user error: %s\n",
+    /*312*/ "compiler bug: calling stock \"%s\" that has no generated code\n",
+    /*313*/
     "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
 };
 

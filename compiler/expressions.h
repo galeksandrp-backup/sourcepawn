@@ -54,12 +54,11 @@ class ExpressionParser
 #define MATCHTAG_SILENT 0x2      // silence the error(213) warning
 #define MATCHTAG_DEDUCE 0x4      // correct coercion
 
+struct UserOperation;
 bool find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op);
 void emit_userop(const UserOperation& user_op, value* lval);
 
 int findnamedarg(arginfo* arg, const char* name);
-cell array_totalsize(symbol* sym);
-cell array_levelsize(symbol* sym, int level);
 int commutative(void (*oper)());
 cell calc(cell left, void (*oper)(), cell right, char* boolresult);
 bool is_valid_index_tag(int tag);
@@ -74,6 +73,6 @@ int lvalexpr(svalue* sval);
 void user_inc();
 void user_dec();
 int checktag(int tag, int exprtag);
-void setdefarray(cell* string, cell size, cell array_sz, cell* dataaddr, int fconst);
+bool is_legacy_enum_tag(int tag);
 
 #endif // am_sourcepawn_compiler_sc3_h

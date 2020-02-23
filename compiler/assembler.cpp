@@ -510,6 +510,8 @@ static OPCODEC opcodelist[] = {
   {111, "inc.i",      sIN_CSEG, parm0 },
   {107, "inc.pri",    sIN_CSEG, parm0 },
   {110, "inc.s",      sIN_CSEG, parm1 },
+  {170, "initarray.alt", sIN_CSEG, parm5 },
+  {169, "initarray.pri", sIN_CSEG, parm5 },
   { 86, "invert",     sIN_CSEG, parm0 },
   { 55, "jeq",        sIN_CSEG, do_jump },
   { 56, "jneq",       sIN_CSEG, do_jump },
@@ -1516,12 +1518,11 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     // Set up the code section.
     code->header().codesize = code_buffer.length() * sizeof(cell);
     code->header().cellsize = sizeof(cell);
-    code->header().codeversion =
-        (pc_code_version) ? pc_code_version : SmxConsts::CODE_VERSION_SM_LEGACY;
+    code->header().codeversion = SmxConsts::CODE_VERSION_FEATURE_MASK;
     code->header().flags = CODEFLAG_DEBUG;
     code->header().main = 0;
     code->header().code = sizeof(sp_file_code_t);
-    code->header().features = 0;
+    code->header().features = SmxConsts::kCodeFeatureDirectArrays;
     code->setBlob((uint8_t*)code_buffer.buffer(), code_buffer.length() * sizeof(cell));
 
     // Set up the data section. Note pre-SourceMod 1.7, the |memsize| was
