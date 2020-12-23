@@ -26,7 +26,7 @@ CodeStubs::InitializeFeatureDetection()
 {
   MacroAssembler masm;
   MacroAssembler::GenerateFeatureDetection(masm);
-  CodeChunk code = LinkCode(env_, masm);
+  CodeChunk code = LinkCode(env_, masm, "<cpu feature detection>", {});
   if (!code.address())
     return false;
   MacroAssembler::RunFeatureDetection(code.address());
@@ -97,7 +97,7 @@ CodeStubs::CompileInvokeStub()
   __ bind(&error);
   __ jmp(&ret);
 
-  invoke_stub_ = LinkCode(env_, masm);
+  invoke_stub_ = LinkCode(env_, masm, "<jit invoke stub>", {});
   if (!invoke_stub_.address())
     return false;
 

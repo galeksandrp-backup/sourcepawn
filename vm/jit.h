@@ -134,6 +134,7 @@ class CompilerBase : public PcodeVisitor
 
   // Debugging.
   Label debug_break_;
+  std::unique_ptr<char[]> debug_name_;
 
   std::vector<BackwardJump> backward_jumps_;
   std::vector<CipMapEntry> cip_map_;
