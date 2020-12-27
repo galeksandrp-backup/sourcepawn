@@ -38,6 +38,7 @@ Environment::Environment()
    debugger_(nullptr),
    eh_top_(nullptr),
    exception_code_(SP_ERROR_NONE),
+   debug_metadata_flags_(JIT_DEBUG_DELETE_ON_EXIT | JIT_DEBUG_PERF_BASIC),
    profiler_(nullptr),
 #if defined(SP_HAS_JIT)
    jit_enabled_(true),
@@ -121,6 +122,12 @@ Environment::EnableDebugBreak()
 
   debug_break_enabled_ = true;
   return true;
+}
+
+void
+Environment::SetDebugMetadataFlags(int flags)
+{
+  debug_metadata_flags_ = flags;
 }
 
 void

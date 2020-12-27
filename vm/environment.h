@@ -64,6 +64,7 @@ class Environment : public ISourcePawnEnvironment
   bool HasPendingException(const ExceptionHandler* handler) override;
   const char* GetPendingExceptionMessage(const ExceptionHandler* handler) override;
   bool EnableDebugBreak() override;
+  void SetDebugMetadataFlags(int flags) override;
 
   // Runtime functions.
   const char* GetErrorString(int err);
@@ -129,6 +130,10 @@ class Environment : public ISourcePawnEnvironment
     return debug_break_handler_;
   }
 
+  int GetDebugMetadataFlags() const {
+    return debug_metadata_flags_;
+  }
+
   WatchdogTimer* watchdog() const {
     return watchdog_timer_.get();
   }
@@ -190,6 +195,8 @@ class Environment : public ISourcePawnEnvironment
   ExceptionHandler* eh_top_;
   int exception_code_;
   char exception_message_[1024];
+
+  int debug_metadata_flags_;
 
   IProfilingTool* profiler_;
   bool jit_enabled_;
