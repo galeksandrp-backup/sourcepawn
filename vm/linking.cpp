@@ -67,6 +67,8 @@ class PerfJitFile {
     fprintf(file_,
       (sizeof(long) == 8) ? "%lx %lx %s\n" : "%llx %llx %s\n",
       (uint64_t)address, length, symbol);
+
+    fflush(file_);
   }
 
  private:
@@ -117,6 +119,8 @@ class PerfJitdumpFile {
     header.flags = use_arch_timestamp_ ? JITDUMP_FLAGS_ARCH_TIMESTAMP : 0;
 
     fwrite(&header, sizeof(header), 1, file_);
+
+    fflush(file_);
   }
 
   ~PerfJitdumpFile() {
@@ -178,6 +182,8 @@ class PerfJitdumpFile {
     fwrite(&record, sizeof(record), 1, file_);
     fwrite(symbol, 1, strlen(symbol) + 1, file_);
     fwrite(address, 1, length, file_);
+
+    fflush(file_);
   }
 
  private:
